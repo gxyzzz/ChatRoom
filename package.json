@@ -1,6 +1,6 @@
 {
   "name": "@zhanguym/chatroom",
-  "version": "1.1.0-beta.1",
+  "version": "1.1.0",
   "type": "module",
   "description": "Local MCP runtime for ChatGPT with workspace, process, Cloud, and WebUI controls.",
   "bin": {
