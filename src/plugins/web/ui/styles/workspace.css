@@ -406,6 +406,37 @@
 }
 
 .workspace-file-preview {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.workspace-preview-toolbar {
+  display: flex;
+  flex: 0 0 auto;
+  min-width: 0;
+  min-height: 44px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 10px;
+  border-bottom: 1px solid rgb(var(--v-theme-outline), 0.1);
+}
+
+.workspace-preview-filename {
+  min-width: 0;
+  overflow: hidden;
+  color: rgb(var(--v-theme-on-surface), 0.62);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-preview-toolbar .v-btn {
+  flex: 0 0 auto;
+}
+
+.workspace-preview-content {
   min-width: 0;
 }
 
@@ -420,16 +451,6 @@
   align-items: center;
   gap: 10px;
   padding: 5px 8px 5px 12px;
-}
-
-.workspace-markdown-path {
-  min-width: 0;
-  flex: 1 1 auto;
-  overflow: hidden;
-  color: rgb(var(--v-theme-on-surface), 0.58);
-  font-size: 11px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .workspace-markdown-mode {
@@ -498,15 +519,6 @@
 
 .workspace-image-preview {
   overflow: hidden;
-}
-
-.workspace-image-header {
-  overflow: hidden;
-  padding: 9px 12px;
-  color: rgb(var(--v-theme-on-surface), 0.58);
-  font-size: 11px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .workspace-image-stage {
@@ -611,5 +623,112 @@
 
   .workspace-tabs .v-tab {
     padding-inline: 10px;
+  }
+}
+
+@media (min-width: 821px) {
+  /* Keep the workspace header and tabs visible while each workbench pane scrolls. */
+  .app-shell--contained .workspace-layout {
+    display: flex;
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 0;
+  }
+
+  .workspace-layout .workspace-detail {
+    display: flex;
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 0;
+    flex-direction: column;
+  }
+
+  .workspace-detail > .v-window {
+    flex: 1 1 0;
+    min-height: 0;
+  }
+
+  .workspace-detail > .v-window > .v-window__container,
+  .workspace-detail > .v-window > .v-window__container > .v-window-item {
+    height: 100%;
+    min-height: 0;
+  }
+
+  .workspace-git-pane {
+    display: flex;
+    height: 100%;
+    min-height: 0;
+    flex-direction: column;
+  }
+
+  .git-workbench {
+    flex: 1 1 0;
+    min-height: 0;
+  }
+
+  .git-change-list.v-list {
+    min-height: 0;
+    overflow-y: auto;
+  }
+
+  .git-diff-pane {
+    display: flex;
+    min-height: 0;
+    flex-direction: column;
+  }
+
+  .git-diff-pane .git-diff-viewer {
+    flex: 1 1 0;
+    min-height: 0;
+  }
+
+  .git-history {
+    flex: 0 1 auto;
+    max-height: 30%;
+    min-height: 0;
+    overflow-y: auto;
+  }
+
+  .workspace-files-pane,
+  .workspace-files-layout {
+    height: 100%;
+    min-height: 0;
+  }
+
+  .workspace-file-browser {
+    display: flex;
+    min-height: 0;
+    flex-direction: column;
+  }
+
+  .workspace-file-list.v-list {
+    flex: 1 1 0;
+    min-height: 0;
+    overflow-y: auto;
+  }
+
+  .workspace-file-preview {
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .workspace-preview-content {
+    flex: 1 1 0;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .workspace-preview-content > .workspace-markdown-preview {
+    display: flex;
+    height: 100%;
+    min-height: 0;
+    flex-direction: column;
+  }
+
+  .workspace-markdown-body,
+  .workspace-markdown-source {
+    flex: 1 1 auto;
+    min-height: 0;
   }
 }

@@ -70,3 +70,31 @@ test("SystemLog persists redacted JSONL and filters history", async () => {
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test("SystemLog strips ANSI escapes from new records", async () => {
+  const dir = await mkdtemp(
+    path.join(os.tmpdir(), "chatroom-system-log-ansi-"),
+  );
+  try {
+    const store = new FileLogStore(dir);
+    const logs = new SystemLog(store);
+    const received: string[] = [];
+    logs.subscribe((record) => received.push(record.message));
+
+    logs.debug(
+      "agent.codex",
+      "codex.stderr",
+      "\u001b[2m2026-10-09T04:21:39Z\u001b[0m \u001b[31mERROR\u001b[0m failed to load cache",
+    );
+    await logs.flush();
+
+    assert.deepEqual(received, [
+      "2026-10-09T04:21:39Z ERROR failed to load cache",
+    ]);
+    const saved = await readFile(store.filePath, "utf8");
+    assert.doesNotMatch(saved, /\\u001b/);
+    assert.match(saved, /ERROR failed to load cache/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});

@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
-import express, { Router } from "express";
+import express, { Router, type Request, type Response } from "express";
+import type { WorkspaceFs } from "#plugins/workspace/workspace-fs";
 import { ChatRoomError } from "#core/errors/chatroom-error";
 import {
   asyncRoute,
@@ -95,9 +96,7 @@ export function createWorkspaceApiRouter(application: WebRuntime): Router {
   router.get(
     "/workspace/file",
     asyncRoute(async (req, res) => {
-      const fs = await application.workspaces.fs(
-        requireString(req.query.root, "root"),
-      );
+      const fs = await requestWorkspaceFs(req, application);
       res.json(
         await fs.read(requireString(req.query.path, "path"), {
           maxBytes: 2 * 1024 * 1024,
@@ -191,6 +190,37 @@ export function createWorkspaceApiRouter(application: WebRuntime): Router {
   );
 
   router.get(
+    "/workspace/file/download",
+    asyncRoute(async (req, res) => {
+      const filePath = requireString(req.query.path, "path");
+      const fs = await requestWorkspaceFs(req, application);
+      await streamWorkspaceFile(
+        req,
+        res,
+        fs,
+        filePath,
+        "application/octet-stream",
+        true,
+      );
+    }),
+  );
+
+  router.get(
+    "/workspace/file/preview",
+    asyncRoute(async (req, res) => {
+      const filePath = requireString(req.query.path, "path");
+      const mime = previewMime(filePath);
+      if (!mime)
+        throw new ChatRoomError(
+          "INVALID_INPUT",
+          "Unsupported file preview type",
+        );
+      const fs = await requestWorkspaceFs(req, application);
+      await streamWorkspaceFile(req, res, fs, filePath, mime, false);
+    }),
+  );
+
+  router.get(
     "/workspace/file/image",
     asyncRoute(async (req, res) => {
       const filePath = requireString(req.query.path, "path");
@@ -200,9 +230,7 @@ export function createWorkspaceApiRouter(application: WebRuntime): Router {
           "INVALID_INPUT",
           "File type is not supported for image preview",
         );
-      const fs = await application.workspaces.fs(
-        requireString(req.query.root, "root"),
-      );
+      const fs = await requestWorkspaceFs(req, application);
       const file = await fs.readBytes(filePath, {
         maxBytes: MAX_IMAGE_PREVIEW_BYTES,
       });
@@ -222,6 +250,11 @@ export function createWorkspaceApiRouter(application: WebRuntime): Router {
         typeof req.query.v === "string" ? req.query.v : null;
 
       res.setHeader("Content-Type", mime);
+      if (mime === "image/svg+xml")
+        res.setHeader(
+          "Content-Security-Policy",
+          "sandbox; default-src 'none'; style-src 'unsafe-inline'",
+        );
       res.setHeader("ETag", etag);
       res.setHeader("Last-Modified", file.modifiedAt);
       res.setHeader(
@@ -245,6 +278,14 @@ export function createWorkspaceApiRouter(application: WebRuntime): Router {
   return router;
 }
 
+function requestWorkspaceFs(req: Request, application: WebRuntime) {
+  if (req.query.workspace !== undefined)
+    return application.workspaces.fsByAlias(
+      requireString(req.query.workspace, "workspace"),
+    );
+  return application.workspaces.fs(requireString(req.query.root, "root"));
+}
+
 function imageMime(filePath: string): string | null {
   switch (filePath.split(".").pop()?.toLowerCase()) {
     case "png":
@@ -262,6 +303,8 @@ function imageMime(filePath: string): string | null {
       return "image/bmp";
     case "ico":
       return "image/x-icon";
+    case "svg":
+      return "image/svg+xml";
     default:
       return null;
   }
@@ -271,4 +314,117 @@ function attachmentFileName(value: string): string {
   const name = value.split(/[\\/]/).pop()?.trim() ?? "";
   const safe = name.replace(/[^A-Za-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "");
   return (safe || "attachment").slice(0, 160);
+}
+
+function previewMime(filePath: string): string | null {
+  switch (filePath.split(".").pop()?.toLowerCase()) {
+    case "pdf":
+      return "application/pdf";
+    case "mp4":
+    case "m4v":
+      return "video/mp4";
+    case "webm":
+      return "video/webm";
+    case "ogv":
+      return "video/ogg";
+    case "mov":
+      return "video/quicktime";
+    case "mp3":
+      return "audio/mpeg";
+    case "m4a":
+      return "audio/mp4";
+    case "aac":
+      return "audio/aac";
+    case "wav":
+      return "audio/wav";
+    case "flac":
+      return "audio/flac";
+    case "oga":
+    case "opus":
+    case "ogg":
+      return "audio/ogg";
+    default:
+      return null;
+  }
+}
+
+function parseByteRange(
+  header: string,
+  size: number,
+): { start: number; end: number } | null {
+  const match = /^bytes=(\d*)-(\d*)$/.exec(header.trim());
+  if (!match || size === 0 || (!match[1] && !match[2])) return null;
+
+  let start: number;
+  let end: number;
+  if (!match[1]) {
+    const suffix = Number(match[2]);
+    if (!Number.isSafeInteger(suffix) || suffix <= 0) return null;
+    start = Math.max(0, size - suffix);
+    end = size - 1;
+  } else {
+    start = Number(match[1]);
+    end = match[2] ? Number(match[2]) : size - 1;
+    if (
+      !Number.isSafeInteger(start) ||
+      !Number.isSafeInteger(end) ||
+      start >= size ||
+      end < start
+    )
+      return null;
+    end = Math.min(end, size - 1);
+  }
+  return { start, end };
+}
+
+async function streamWorkspaceFile(
+  req: Request,
+  res: Response,
+  fs: WorkspaceFs,
+  relativePath: string,
+  mime: string,
+  download: boolean,
+): Promise<void> {
+  const { handle, bytes } = await fs.openReadable(relativePath);
+  const isRange = typeof req.headers.range === "string";
+  const range = isRange ? parseByteRange(req.headers.range!, bytes) : null;
+  res.setHeader("Content-Type", mime);
+  res.setHeader("Cache-Control", "private, no-store, no-transform");
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("Accept-Ranges", "bytes");
+  if (download) {
+    const name =
+      relativePath.replaceAll("\\", "/").split("/").pop() || "download";
+    const fallback = name.replace(/[^\x20-\x7e]/g, "_").replace(/["\\]/g, "_");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${fallback}"; filename*=UTF-8''${encodeURIComponent(name)}`,
+    );
+  } else {
+    res.setHeader("Content-Disposition", "inline");
+  }
+
+  if (isRange && !range) {
+    res.setHeader("Content-Range", `bytes */${bytes}`);
+    await handle.close();
+    res.status(416).end();
+    return;
+  }
+  const start = range?.start ?? 0;
+  const end = range?.end ?? bytes - 1;
+  if (range) {
+    res.status(206);
+    res.setHeader("Content-Range", `bytes ${start}-${end}/${bytes}`);
+  }
+  res.setHeader("Content-Length", String(Math.max(0, end - start + 1)));
+  if (req.method === "HEAD" || bytes === 0) {
+    await handle.close();
+    res.end();
+    return;
+  }
+
+  const stream = handle.createReadStream({ start, end, autoClose: true });
+  res.on("close", () => stream.destroy());
+  stream.on("error", (error) => res.destroy(error));
+  stream.pipe(res);
 }

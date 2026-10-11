@@ -28,6 +28,7 @@ export interface ComputerDisplay {
 export interface ComputerStatus {
   platform: ComputerPlatform;
   helper: ComputerHelperState;
+  unavailableReason?: "no_x11_session";
   permissions: ComputerPermissions;
   displays: ComputerDisplay[];
   settings: ComputerSettings;

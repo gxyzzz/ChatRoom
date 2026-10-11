@@ -10,9 +10,11 @@ export const WorkspaceServiceToken =
 
 export function createWorkspacePlugin(): InternalPlugin {
   let service: WorkspaceService | null = null;
+  let webBaseUrl: () => string | null = () => null;
   return {
     id: "workspace",
     async activate(context) {
+      webBaseUrl = () => context.externalAccess.publicWebBaseUrl();
       service = await WorkspaceService.create(
         context.config.allowedRoots,
         context.services.require(GitAccessToken),
@@ -22,10 +24,11 @@ export function createWorkspacePlugin(): InternalPlugin {
     },
     registerMcp(mcp) {
       if (!service) throw new Error("Workspace plugin is not active");
-      registerWorkspaceTools(mcp, service);
+      registerWorkspaceTools(mcp, service, webBaseUrl);
     },
     deactivate() {
       service = null;
+      webBaseUrl = () => null;
     },
   };
 }

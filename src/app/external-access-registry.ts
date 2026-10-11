@@ -26,6 +26,10 @@ export class ExternalAccessRegistry {
     this.cloud = { mcpBaseUrl: null, webBaseUrl: null };
   }
 
+  publicWebBaseUrl(): string | null {
+    return this.cloud.webBaseUrl ?? this.selfHosted.webBaseUrl;
+  }
+
   baseUrlForHost(kind: ExternalAccessKind, hostname: string): string | null {
     for (const url of this.urls(kind))
       if (new URL(url).hostname === hostname) return url;

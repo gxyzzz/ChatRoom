@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { stripVTControlCharacters } from "node:util";
 import { SecretRedactor } from "#core/operations/redactor";
 import type {
   LogLevel,
@@ -76,7 +77,7 @@ export class SystemLog implements LogService {
     data?: Record<string, unknown>,
   ): void {
     const redacted = this.redactor.redact({
-      message,
+      message: stripVTControlCharacters(message),
       ...(data ? { data: normalizeValue(data) } : {}),
     }) as { message: string; data?: Record<string, unknown> };
 

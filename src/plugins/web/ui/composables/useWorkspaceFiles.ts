@@ -17,6 +17,7 @@ export type WorkspaceFilePreview =
       truncated: boolean;
     }
   | { kind: "image"; path: string; url: string }
+  | { kind: "pdf" | "video" | "audio"; path: string; url: string }
   | { kind: "unsupported"; path: string };
 
 const PAGE_SIZE = 300;
@@ -175,16 +176,25 @@ export function useWorkspaceFiles(root: WatchSource<string>) {
       file.value = { kind: "unsupported", path: entry.path };
       return;
     }
-    if (isImageFile(entry.path)) {
+    const kind = filePreviewKind(entry.path);
+    if (kind === "image") {
       file.value = {
-        kind: "image",
+        kind,
         path: entry.path,
         url: imageUrl(targetRoot, entry),
       };
       return;
     }
-    if (!isTextFile(entry.path)) {
-      file.value = { kind: "unsupported", path: entry.path };
+    if (kind === "pdf" || kind === "video" || kind === "audio") {
+      file.value = {
+        kind,
+        path: entry.path,
+        url: previewUrl(targetRoot, entry),
+      };
+      return;
+    }
+    if (kind === "unsupported") {
+      file.value = { kind, path: entry.path };
       return;
     }
 
@@ -265,8 +275,15 @@ function imageUrl(root: string, entry: WorkspaceFile): string {
     : base;
 }
 
+export function filePreviewKind(
+  filePath: string,
+): WorkspaceFilePreview["kind"] {
+  if (isImageFile(filePath)) return "image";
+  return mediaKind(filePath) ?? (isTextFile(filePath) ? "text" : "unsupported");
+}
+
 function isImageFile(filePath: string): boolean {
-  return /\.(png|jpe?g|gif|webp|avif|bmp|ico)$/i.test(filePath);
+  return /\.(png|jpe?g|gif|webp|avif|bmp|ico|svg)$/i.test(filePath);
 }
 
 function isTextFile(filePath: string): boolean {
@@ -287,4 +304,22 @@ function isTextFile(filePath: string): boolean {
   return /\.(txt|md|markdown|json|jsonc|ya?ml|toml|ini|conf|config|xml|html?|css|scss|less|vue|[cm]?[jt]sx?|py|rs|go|java|kt|kts|c|cc|cpp|cxx|h|hpp|sh|bash|zsh|fish|ps1|sql|graphql|gql|proto|diff|patch|csv|tsv|log)$/i.test(
     filePath,
   );
+}
+
+function mediaKind(path: string): "pdf" | "video" | "audio" | null {
+  if (/\.pdf$/i.test(path)) return "pdf";
+  if (/\.(mp4|m4v|webm|ogv|mov)$/i.test(path)) return "video";
+  if (/\.(mp3|m4a|aac|wav|flac|oga|opus|ogg)$/i.test(path)) return "audio";
+  return null;
+}
+
+function previewUrl(root: string, entry: WorkspaceFile): string {
+  const base =
+    "/api/workspace/file/preview?root=" +
+    encodeURIComponent(root) +
+    "&path=" +
+    encodeURIComponent(entry.path);
+  return entry.modifiedAt
+    ? base + "&v=" + encodeURIComponent(entry.modifiedAt)
+    : base;
 }

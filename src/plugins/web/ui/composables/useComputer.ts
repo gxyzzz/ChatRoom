@@ -239,6 +239,10 @@ export function useComputer(
   }
 
   async function refreshPermissionStatus(): Promise<void> {
+    if (status.value?.unavailableReason === "no_x11_session") {
+      await loadStatus();
+      return;
+    }
     if (
       status.value?.platform !== "macos" ||
       (status.value.permissions.accessibility === "granted" &&

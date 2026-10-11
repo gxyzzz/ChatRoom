@@ -8,16 +8,13 @@ const locale = useLocale();
 </script>
 
 <template>
-  <v-dialog
-    v-model="open"
-    max-width="90vw"
-    :persistent="busy"
-    content-class="agent-overlay-dialog"
-  >
+  <v-dialog v-model="open" width="auto" max-width="32rem" :persistent="busy">
     <v-card>
-      <v-card-title>
-        {{ locale.t("$vuetify.chatroom.agents.deleteTitle") }}
-      </v-card-title>
+      <v-card-item prepend-icon="$mdiAlertCircleOutline" class="text-error">
+        <v-card-title>
+          {{ locale.t("$vuetify.chatroom.agents.deleteTitle") }}
+        </v-card-title>
+      </v-card-item>
       <v-card-text>
         {{ locale.t("$vuetify.chatroom.agents.deleteDescription") }}
       </v-card-text>
@@ -28,7 +25,7 @@ const locale = useLocale();
         </v-btn>
         <v-btn
           color="error"
-          variant="tonal"
+          variant="flat"
           :loading="busy"
           @click="$emit('confirm')"
         >

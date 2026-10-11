@@ -22,16 +22,13 @@ const locale = useLocale();
 </script>
 
 <template>
-  <v-dialog
-    v-model="open"
-    max-width="90vw"
-    :persistent="busy"
-    content-class="agent-overlay-dialog"
-  >
+  <v-dialog v-model="open" :persistent="busy">
     <v-card>
-      <v-card-title>{{
-        locale.t("$vuetify.chatroom.agents.review")
-      }}</v-card-title>
+      <v-card-item prepend-icon="$mdiFileCompare">
+        <v-card-title>{{
+          locale.t("$vuetify.chatroom.agents.review")
+        }}</v-card-title>
+      </v-card-item>
       <v-card-text class="agent-review-fields">
         <v-select
           v-model="reviewType"

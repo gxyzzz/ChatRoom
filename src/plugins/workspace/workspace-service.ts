@@ -77,6 +77,24 @@ export class WorkspaceService implements WorkspaceAccess {
   async resolve(input: string): Promise<string> {
     return this.rootsPolicy.resolveWorkspace(input);
   }
+  async resolveAlias(alias: string): Promise<string> {
+    const name = validateProjectName(alias);
+    const matches: string[] = [];
+    for (const parent of this.rootsPolicy.roots()) {
+      const candidate = path.join(parent, name);
+      const canonical = await realpath(candidate).catch(() => null);
+      if (canonical === candidate) matches.push(candidate);
+    }
+    if (matches.length === 0)
+      throw new ChatRoomError("NOT_FOUND", "Workspace not found");
+    if (matches.length > 1)
+      throw new ChatRoomError("CONFLICT", "Workspace alias is ambiguous");
+    return this.resolve(matches[0]!);
+  }
+
+  async fsByAlias(alias: string): Promise<WorkspaceFs> {
+    return WorkspaceFs.create(await this.resolveAlias(alias));
+  }
 
   async createProject(
     parentInput: string,

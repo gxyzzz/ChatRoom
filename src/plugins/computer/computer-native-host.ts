@@ -86,7 +86,18 @@ export class ComputerNativeHost {
       const child = this.child;
       if (!child || child.killed || child.stdin.destroyed)
         this.rejectRequest(id, transportError);
-      else child.stdin.write(line);
+      else {
+        try {
+          child.stdin.write(line, (error) => {
+            if (error) this.failTransport(child, error);
+          });
+        } catch (error) {
+          this.failTransport(
+            child,
+            error instanceof Error ? error : new Error(String(error)),
+          );
+        }
+      }
     }
     return promise;
   }
@@ -137,13 +148,23 @@ export class ComputerNativeHost {
           process.env,
           generation,
         );
-      case "linux":
+      case "linux": {
+        const env = linuxDesktopEnvironment();
+        if (!env.DISPLAY)
+          return Promise.reject(
+            new ChatRoomError(
+              "UNSUPPORTED",
+              "Linux Computer Use requires an active X11 graphical session",
+              { reason: "no_x11_session" },
+            ),
+          );
         return this.startPipeHelper(
           linuxHelperPath(),
           "Linux X11",
-          linuxDesktopEnvironment(),
+          env,
           generation,
         );
+      }
       case "unsupported":
         return Promise.reject(
           new ChatRoomError(
@@ -252,6 +273,7 @@ export class ComputerNativeHost {
       env,
     });
     this.child = child;
+    child.stdin.on("error", (error) => this.failTransport(child, error));
     this.lines = createInterface({ input: child.stdout });
     this.lines.on("line", (line) => this.handleLine(line));
     child.stderr.on("data", (chunk) =>
@@ -281,7 +303,10 @@ export class ComputerNativeHost {
     this.cancelStarting = null;
     cancelStarting?.(error);
     if (isCurrentSocket) this.socket = null;
-    if (isCurrentChild) this.child = null;
+    if (isCurrentChild) {
+      this.child?.kill();
+      this.child = null;
+    }
     this.lines?.close();
     this.lines = null;
     this.cleanupSocketPath();

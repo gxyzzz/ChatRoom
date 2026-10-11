@@ -2,6 +2,7 @@
 import { computed, shallowRef, watch } from "vue";
 import { useDisplay, useLocale } from "vuetify";
 import LoginView from "./components/LoginView.vue";
+import WorkspaceDownloadPage from "./components/WorkspaceDownloadPage.vue";
 import PasskeyManagerDialog from "./components/PasskeyManagerDialog.vue";
 import { useAppNavigation, type View } from "./composables/useAppNavigation.js";
 import { useAppPreferences } from "./composables/useAppPreferences.js";
@@ -9,16 +10,19 @@ import { useAuthSession } from "./composables/useAuthSession.js";
 import { useRuntimeEvents } from "./composables/useRuntimeEvents.js";
 
 const locale = useLocale();
+const isDownloadPage = window.location.pathname === "/download";
 const display = useDisplay();
 const drawer = shallowRef(!display.smAndDown.value);
-const navigation = useAppNavigation();
+const navigation = useAppNavigation(!isDownloadPage);
 const runtimeState = useRuntimeEvents();
 const preferences = useAppPreferences();
 const auth = useAuthSession({
-  onAuthenticated: runtimeState.start,
+  onAuthenticated: () => {
+    if (!isDownloadPage) runtimeState.start();
+  },
   onSignedOut: () => {
     runtimeState.clear();
-    navigation.reset();
+    if (!isDownloadPage) navigation.reset();
     drawer.value = !display.smAndDown.value;
   },
 });
@@ -130,11 +134,15 @@ function formatUptime(totalMinutes: number): string {
     :class="{
       'app-shell--contained':
         authenticated &&
+        !isDownloadPage &&
         (view === 'agents' ||
-          (view === 'processes' && display.width.value > 1100)),
+          (view === 'processes' && display.width.value > 1100) ||
+          (view === 'workspaces' && display.width.value > 820) ||
+          ((view === 'operations' || view === 'systemLogs') &&
+            display.width.value > 1100)),
     }"
   >
-    <template v-if="authenticated">
+    <template v-if="authenticated && !isDownloadPage">
       <v-navigation-drawer
         v-model="drawer"
         :temporary="display.smAndDown.value"
@@ -311,6 +319,8 @@ function formatUptime(totalMinutes: number): string {
         </v-container>
       </v-main>
     </template>
+
+    <WorkspaceDownloadPage v-else-if="authenticated && isDownloadPage" />
 
     <LoginView
       v-else-if="authenticated === false"

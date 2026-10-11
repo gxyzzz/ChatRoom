@@ -115,6 +115,53 @@ export class WorkspaceFs {
     );
   }
 
+  async openReadable(relativePath: string) {
+    const target = await resolveReadableWithin(this.root, relativePath);
+    const handle = await open(target, "r");
+    try {
+      const info = await handle.stat();
+      if (!info.isFile())
+        throw new ChatRoomError("INVALID_INPUT", `Not a file: ${relativePath}`);
+      return { handle, bytes: info.size, modifiedAt: info.mtime.toISOString() };
+    } catch (error) {
+      await handle.close();
+      throw error;
+    }
+  }
+
+  async readChunk(
+    relativePath: string,
+    offset: number,
+    maxBytes: number,
+  ): Promise<{ data: Buffer; bytes: number; modifiedAt: string }> {
+    const { handle, bytes, modifiedAt } = await this.openReadable(relativePath);
+    try {
+      if (!Number.isSafeInteger(offset) || offset < 0 || offset > bytes)
+        throw new ChatRoomError("INVALID_INPUT", "Invalid file offset");
+      if (!Number.isSafeInteger(maxBytes) || maxBytes < 1 || maxBytes > 262144)
+        throw new ChatRoomError("INVALID_INPUT", "Invalid file chunk size");
+      const length = Math.min(maxBytes, bytes - offset);
+      const buffer = Buffer.alloc(length);
+      let position = 0;
+      while (position < length) {
+        const { bytesRead } = await handle.read(
+          buffer,
+          position,
+          length - position,
+          offset + position,
+        );
+        if (bytesRead === 0) break;
+        position += bytesRead;
+      }
+      const after = await handle.stat();
+      if (after.size !== bytes || after.mtime.toISOString() !== modifiedAt)
+        throw new ChatRoomError("CONFLICT", "File changed while reading");
+      return { data: buffer.subarray(0, position), bytes, modifiedAt };
+    } finally {
+      await handle.close();
+    }
+  }
+
   async write(relativePath: string, content: string): Promise<WorkspaceFile> {
     if (typeof content !== "string")
       throw new ChatRoomError("INVALID_INPUT", "File content must be a string");

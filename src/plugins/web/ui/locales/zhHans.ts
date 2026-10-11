@@ -32,6 +32,11 @@ export const zhChatRoom: typeof enChatRoom = {
         description:
           "读取完整工作区上下文，包括项目概况、预设提示词、项目指令和 Skill 元数据。",
       },
+      workspace_file_get: {
+        title: "获取工作区文件",
+        description:
+          "分块读取工作区文件内容（UTF-8 文本或 Base64 二进制），或生成需登录 ChatRoom Web 才能使用的下载链接。",
+      },
       process_start: {
         title: "启动进程",
         description: "启动受管理进程并立即返回 ProcessId。",
@@ -150,6 +155,7 @@ export const zhChatRoom: typeof enChatRoom = {
       completed: "对话上下文已压缩",
       failed: "上下文压缩未完成",
     },
+    fullAccessTitle: "启用完全权限？",
     fullAccessConfirm:
       "完全权限允许 Agent 执行命令，并访问工作区以外的文件和网络，不再逐项询问常规权限。仅对可信任务启用。确认启用完全权限？",
     nativeOptions: {
@@ -286,6 +292,8 @@ export const zhChatRoom: typeof enChatRoom = {
   computer: {
     title: "电脑控制",
     platform: "平台",
+    noX11Session:
+      "未检测到活动的 X11 图形会话。请在此设备上登录 X11 桌面后刷新，无需重启 ChatRoom。",
     helper: "原生辅助程序",
     access: "访问控制",
     enabled: "启用电脑控制",
@@ -554,6 +562,20 @@ export const zhChatRoom: typeof enChatRoom = {
     parentDirectory: "上级目录",
     refresh: "刷新目录",
     loadMore: "加载更多文件",
+    tableSummary: "{0} 行 · {1} 列",
+    tableLimited: "仅显示部分内容（最多 2 MiB、2000 行、100 列）。",
+    column: "第 {0} 列",
+    previousPage: "上一页",
+    nextPage: "下一页",
+    emptyTable: "空表格",
+    openOriginal: "打开原文件",
+    download: "下载文件",
+    downloadFailed: "下载失败",
+    downloadRequested: "已请求下载",
+    preparingDownload: "正在准备下载…",
+    invalidDownload: "下载链接无效。",
+    downloadStarted: "如果浏览器没有自动开始下载，可以点击“下载文件”重试。",
+    backToWorkspace: "返回工作区",
   },
   skills: {
     empty: "未发现 Skill。",
@@ -608,6 +630,7 @@ export const zhChatRoom: typeof enChatRoom = {
     workspaceList: "列出工作区",
     workspaceInfo: "读取工作区信息",
     workspaceCreate: "创建工作区",
+    workspaceFileGet: "获取工作区文件",
     workspaceFileWrite: "写入工作区文件",
     workspaceAttachmentUpload: "上传工作区附件",
     gitStage: "暂存 Git 修改",

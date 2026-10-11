@@ -90,6 +90,7 @@ function pluginLabel(pluginId: string): string {
 const localizedTools = new Set([
   "workspace_list",
   "workspace_info",
+  "workspace_file_get",
   "process_start",
   "process_read",
   "process_write",

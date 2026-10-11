@@ -10,26 +10,25 @@ const locale = useLocale();
 </script>
 
 <template>
-  <v-dialog v-model="open" width="auto" max-width="90vw">
+  <v-dialog v-model="open" width="auto" max-width="42rem">
     <v-card class="passkey-dialog">
-      <div class="panel-header">
-        <div>
-          <div class="panel-title">
-            {{ locale.t("$vuetify.chatroom.auth.passkeys") }}
-          </div>
-          <div class="panel-subtitle">
-            {{ locale.t("$vuetify.chatroom.auth.passkeyDescription") }}
-          </div>
-        </div>
-        <v-btn
-          icon="$mdiClose"
-          variant="text"
-          size="small"
-          :aria-label="locale.t('$vuetify.chatroom.common.close')"
-          @click="open = false"
-        />
-      </div>
-      <v-divider />
+      <v-card-item prepend-icon="$mdiFingerprint">
+        <v-card-title>{{
+          locale.t("$vuetify.chatroom.auth.passkeys")
+        }}</v-card-title>
+        <v-card-subtitle>{{
+          locale.t("$vuetify.chatroom.auth.passkeyDescription")
+        }}</v-card-subtitle>
+        <template #append>
+          <v-btn
+            icon="$mdiClose"
+            variant="text"
+            size="small"
+            :aria-label="locale.t('$vuetify.chatroom.common.close')"
+            @click="open = false"
+          />
+        </template>
+      </v-card-item>
       <v-card-text class="passkey-dialog-content">
         <div class="passkey-register-row">
           <v-text-field

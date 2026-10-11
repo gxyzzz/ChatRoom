@@ -12,11 +12,13 @@ const props = withDefaults(
     filename?: string;
     language?: string;
     toolbar?: boolean;
+    showDownload?: boolean;
     highlight?: boolean;
   }>(),
   {
     filename: "chatroom-output.txt",
     toolbar: true,
+    showDownload: true,
     highlight: true,
   },
 );
@@ -149,6 +151,7 @@ function download() {
             @click="wrap = !wrap"
           />
           <v-btn
+            v-if="showDownload"
             icon="$mdiDownloadOutline"
             size="small"
             variant="text"

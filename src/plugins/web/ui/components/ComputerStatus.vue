@@ -54,6 +54,14 @@ function displaySubtitle(display: ComputerStatus["displays"][number]): string {
       </div>
       <v-divider />
       <v-card-text class="computer-status-list">
+        <v-alert
+          v-if="status.unavailableReason === 'no_x11_session'"
+          type="info"
+          variant="tonal"
+          density="compact"
+        >
+          {{ locale.t("$vuetify.chatroom.computer.noX11Session") }}
+        </v-alert>
         <div class="computer-status-row">
           <span class="computer-status-label">
             {{ locale.t("$vuetify.chatroom.computer.platform") }}

@@ -266,7 +266,8 @@ function setGranular(field: string, value: boolean) {
 
   <v-dialog
     :model-value="pendingPermissionMode !== null"
-    max-width="90vw"
+    width="auto"
+    max-width="32rem"
     @update:model-value="
       (value) => {
         if (!value) pendingPermissionMode = null;
@@ -274,6 +275,11 @@ function setGranular(field: string, value: boolean) {
     "
   >
     <v-card>
+      <v-card-item prepend-icon="$mdiAlertCircleOutline" class="text-warning">
+        <v-card-title>{{
+          locale.t("$vuetify.chatroom.agents.fullAccessTitle")
+        }}</v-card-title>
+      </v-card-item>
       <v-card-text>
         {{ locale.t("$vuetify.chatroom.agents.fullAccessConfirm") }}
       </v-card-text>
@@ -282,7 +288,7 @@ function setGranular(field: string, value: boolean) {
         <v-btn variant="text" @click="pendingPermissionMode = null">
           {{ locale.t("$vuetify.chatroom.common.cancel") }}
         </v-btn>
-        <v-btn color="primary" variant="tonal" @click="confirmPermissionMode">
+        <v-btn color="warning" variant="flat" @click="confirmPermissionMode">
           {{ locale.t("$vuetify.chatroom.common.confirm") }}
         </v-btn>
       </v-card-actions>

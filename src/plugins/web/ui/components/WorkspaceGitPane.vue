@@ -323,11 +323,13 @@ async function confirmDeleteBranch() {
       </div>
     </template>
 
-    <v-dialog v-model="branchDialog" width="auto" max-width="90vw">
+    <v-dialog v-model="branchDialog" width="auto" max-width="42rem">
       <v-card>
-        <v-card-title>{{
-          locale.t("$vuetify.chatroom.git.branches")
-        }}</v-card-title>
+        <v-card-item prepend-icon="$mdiSourceBranch">
+          <v-card-title>{{
+            locale.t("$vuetify.chatroom.git.branches")
+          }}</v-card-title>
+        </v-card-item>
         <v-card-text>
           <div class="git-new-branch">
             <v-text-field
@@ -393,23 +395,25 @@ async function confirmDeleteBranch() {
     <v-dialog
       :model-value="restoreTarget !== null"
       width="auto"
-      max-width="90vw"
+      max-width="32rem"
     >
       <v-card>
-        <v-card-title>
-          {{
-            restoreTarget?.kind === "untracked"
-              ? locale.t("$vuetify.chatroom.git.deleteTitle")
-              : locale.t("$vuetify.chatroom.git.restoreTitle")
-          }}
-        </v-card-title>
+        <v-card-item prepend-icon="$mdiAlertCircleOutline" class="text-error">
+          <v-card-title>
+            {{
+              restoreTarget?.kind === "untracked"
+                ? locale.t("$vuetify.chatroom.git.deleteTitle")
+                : locale.t("$vuetify.chatroom.git.restoreTitle")
+            }}
+          </v-card-title>
+        </v-card-item>
         <v-card-text>
           {{
             restoreTarget?.kind === "untracked"
               ? locale.t("$vuetify.chatroom.git.deleteDescription")
               : locale.t("$vuetify.chatroom.git.restoreDescription")
           }}
-          <div class="mono mt-2">{{ restoreTarget?.path }}</div>
+          <div class="mono mt-2 text-break">{{ restoreTarget?.path }}</div>
         </v-card-text>
         <v-card-actions>
           <v-spacer />
@@ -431,15 +435,17 @@ async function confirmDeleteBranch() {
     <v-dialog
       :model-value="deleteBranchTarget !== null"
       width="auto"
-      max-width="90vw"
+      max-width="32rem"
     >
       <v-card>
-        <v-card-title>{{
-          locale.t("$vuetify.chatroom.git.deleteBranchTitle")
-        }}</v-card-title>
+        <v-card-item prepend-icon="$mdiAlertCircleOutline" class="text-error">
+          <v-card-title>{{
+            locale.t("$vuetify.chatroom.git.deleteBranchTitle")
+          }}</v-card-title>
+        </v-card-item>
         <v-card-text>
           {{ locale.t("$vuetify.chatroom.git.deleteBranchDescription") }}
-          <div class="mono mt-2">{{ deleteBranchTarget?.name }}</div>
+          <div class="mono mt-2 text-break">{{ deleteBranchTarget?.name }}</div>
         </v-card-text>
         <v-card-actions>
           <v-spacer />

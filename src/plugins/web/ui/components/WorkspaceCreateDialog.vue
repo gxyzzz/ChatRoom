@@ -39,19 +39,22 @@ function submit() {
 </script>
 
 <template>
-  <v-dialog v-model="open" width="auto" max-width="90vw">
+  <v-dialog v-model="open" width="auto">
     <v-card>
-      <v-card-title class="d-flex align-center justify-space-between">
-        <span>{{ locale.t("$vuetify.chatroom.workspaces.createTitle") }}</span>
-        <v-btn
-          icon="$mdiClose"
-          variant="text"
-          size="small"
-          :aria-label="locale.t('$vuetify.chatroom.common.close')"
-          @click="open = false"
-        />
-      </v-card-title>
-      <v-divider />
+      <v-card-item prepend-icon="$mdiFolderOutline">
+        <v-card-title>{{
+          locale.t("$vuetify.chatroom.workspaces.createTitle")
+        }}</v-card-title>
+        <template #append>
+          <v-btn
+            icon="$mdiClose"
+            variant="text"
+            size="small"
+            :aria-label="locale.t('$vuetify.chatroom.common.close')"
+            @click="open = false"
+          />
+        </template>
+      </v-card-item>
       <v-card-text class="workspace-create-form">
         <v-text-field
           v-model="name"
@@ -83,7 +86,6 @@ function submit() {
           {{ error }}
         </v-alert>
       </v-card-text>
-      <v-divider />
       <v-card-actions class="justify-end">
         <v-btn variant="text" @click="open = false">
           {{ locale.t("$vuetify.chatroom.workspaces.cancel") }}

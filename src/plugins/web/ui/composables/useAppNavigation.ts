@@ -119,11 +119,12 @@ const definitions: readonly ViewDefinition[] = [
 const byId = new Map(definitions.map((item) => [item.id, item]));
 const byPath = new Map(definitions.map((item) => [item.path, item.id]));
 
-export function useAppNavigation() {
+export function useAppNavigation(enabled = true) {
   const view = shallowRef<View>(viewFromPath());
   const current = computed(() => byId.get(view.value)!);
 
   onMounted(() => {
+    if (!enabled) return;
     syncFromPath();
     window.addEventListener("popstate", syncFromPath);
   });

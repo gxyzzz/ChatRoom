@@ -213,3 +213,50 @@
     white-space: nowrap;
   }
 }
+
+@media (min-width: 1101px) {
+  .app-shell--contained .operations-layout,
+  .app-shell--contained .system-logs-layout {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 0;
+    grid-template-rows: minmax(0, 1fr);
+    align-items: stretch;
+  }
+
+  .operations-layout .master-pane,
+  .system-logs-layout .master-pane {
+    display: flex;
+    min-height: 0;
+    flex-direction: column;
+  }
+
+  .operations-layout .master-pane > .panel-card,
+  .system-logs-layout .master-pane > .panel-card {
+    display: flex;
+    flex: 1 1 0;
+    min-height: 0;
+    flex-direction: column;
+  }
+
+  .operations-layout .detail-pane,
+  .system-logs-layout .detail-pane {
+    position: static;
+    min-height: 0;
+    overflow-y: auto;
+  }
+
+  .operations-layout .operation-scroll-area,
+  .system-logs-layout .system-log-list {
+    flex: 1 1 0;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .system-logs-layout .system-log-header {
+    position: sticky;
+    z-index: 1;
+    top: 0;
+  }
+}

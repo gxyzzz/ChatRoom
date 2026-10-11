@@ -16,9 +16,17 @@ export class NativeComputerBackend implements ComputerBackend {
   private readonly restartWhenGranted = new Set<ComputerPermission>();
 
   async status(): Promise<Omit<ComputerStatus, "settings">> {
-    const value = await this.readStatus().catch(() => ({
+    const value = await this.readStatus().catch((error: unknown) => ({
       platform: this.host.platform,
       helper: "unavailable" as const,
+      ...(error instanceof ChatRoomError &&
+      error.code === "UNSUPPORTED" &&
+      error.details &&
+      typeof error.details === "object" &&
+      "reason" in error.details &&
+      error.details.reason === "no_x11_session"
+        ? { unavailableReason: "no_x11_session" as const }
+        : {}),
       permissions: {
         accessibility: "unknown" as const,
         screenRecording: "unknown" as const,

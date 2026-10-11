@@ -31,6 +31,11 @@ export const enChatRoom = {
         description:
           "Read complete workspace context, including the project summary, preset prompt, project instructions, and Skill metadata.",
       },
+      workspace_file_get: {
+        title: "Get workspace file",
+        description:
+          "Read workspace file content in bounded UTF-8 or Base64 chunks, or create a Web download link that requires ChatRoom login.",
+      },
       process_start: {
         title: "Start process",
         description:
@@ -160,6 +165,7 @@ export const enChatRoom = {
       completed: "Conversation context compacted",
       failed: "Context compaction did not complete",
     },
+    fullAccessTitle: "Enable Full Access?",
     fullAccessConfirm:
       "Full Access lets the Agent execute commands and access files and the network beyond this workspace without routine permission prompts. Enable only for a trusted task. Enable Full Access?",
     nativeOptions: {
@@ -313,6 +319,8 @@ export const enChatRoom = {
   computer: {
     title: "Computer Use",
     platform: "Platform",
+    noX11Session:
+      "No active X11 graphical session was found. Sign in to an X11 desktop on this machine, then refresh. ChatRoom does not need to restart.",
     helper: "Native helper",
     access: "Access",
     enabled: "Computer Use",
@@ -588,6 +596,22 @@ export const enChatRoom = {
     parentDirectory: "Parent directory",
     refresh: "Refresh directory",
     loadMore: "Load more files",
+    tableSummary: "{0} rows · {1} columns",
+    tableLimited:
+      "Showing a limited preview (up to 2 MiB, 2000 rows, 100 columns).",
+    column: "Column {0}",
+    previousPage: "Previous page",
+    nextPage: "Next page",
+    emptyTable: "Empty table",
+    openOriginal: "Open original file",
+    download: "Download file",
+    downloadFailed: "Download failed",
+    downloadRequested: "Download requested",
+    preparingDownload: "Preparing your download…",
+    invalidDownload: "The download link is invalid.",
+    downloadStarted:
+      "If the browser does not start downloading automatically, select Download file to retry.",
+    backToWorkspace: "Back to workspaces",
   },
   skills: {
     empty: "No discovered skills.",
@@ -643,6 +667,7 @@ export const enChatRoom = {
     workspaceList: "List workspaces",
     workspaceInfo: "Read workspace info",
     workspaceCreate: "Create workspace",
+    workspaceFileGet: "Get workspace file",
     workspaceFileWrite: "Write workspace file",
     workspaceAttachmentUpload: "Upload workspace attachment",
     gitStage: "Stage Git changes",

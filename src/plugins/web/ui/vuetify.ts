@@ -51,6 +51,7 @@ export const vuetify = createVuetify({
     },
   },
   defaults: {
+    VDialog: { maxWidth: "36rem" },
     VCard: { elevation: 0, border: true, rounded: "xl" },
     VBtn: { rounded: "lg", elevation: 0 },
     VTextField: {

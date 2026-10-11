@@ -9,6 +9,7 @@ const actionKeys: Record<string, ActionKey> = {
   "workspace:list": "workspaceList",
   "workspace:info": "workspaceInfo",
   "workspace:create": "workspaceCreate",
+  "workspace:file.get": "workspaceFileGet",
   "workspace:file.write": "workspaceFileWrite",
   "workspace:attachment.upload": "workspaceAttachmentUpload",
   "git:git.stage": "gitStage",

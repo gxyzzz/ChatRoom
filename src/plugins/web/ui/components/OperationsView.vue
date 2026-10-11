@@ -21,6 +21,7 @@ const props = defineProps<{
 const locale = useLocale();
 const { mdAndDown: compact } = useDisplay();
 const loadSentinel = useTemplateRef<HTMLElement>("loadSentinel");
+const listScroller = useTemplateRef<HTMLElement>("listScroller");
 const clearDialog = shallowRef(false);
 const { focusDetail, focusMaster } = useMasterDetailFocus(compact);
 const operations = useOperations(
@@ -71,7 +72,12 @@ async function continueLoadingIfVisible() {
   await nextTick();
   const element = loadSentinel.value;
   if (!element || loadingMore.value || !hasMore.value) return;
-  if (element.getBoundingClientRect().top <= window.innerHeight + 240)
+  const scrollBottom =
+    listScroller.value?.getBoundingClientRect().bottom ?? window.innerHeight;
+  if (
+    element.getBoundingClientRect().top <=
+    Math.min(scrollBottom, window.innerHeight) + 240
+  )
     void operations.loadMore();
 }
 
@@ -141,32 +147,34 @@ async function clearHistory() {
         <v-alert v-if="error" type="error" variant="tonal" density="compact">
           {{ error }}
         </v-alert>
-        <OperationTable
-          :events="events"
-          :selected="selected"
-          @select="select"
-        />
-        <v-alert
-          v-if="limitReached"
-          type="info"
-          variant="tonal"
-          density="compact"
-          class="operation-window-limit"
-        >
-          {{ locale.t("$vuetify.chatroom.operations.windowLimit") }}
-        </v-alert>
-        <div
-          v-if="hasMore || loadingMore"
-          ref="loadSentinel"
-          class="operation-load-sentinel"
-          aria-hidden="true"
-        >
-          <v-progress-circular
-            v-if="loadingMore"
-            indeterminate
-            size="20"
-            width="2"
+        <div ref="listScroller" class="operation-scroll-area">
+          <OperationTable
+            :events="events"
+            :selected="selected"
+            @select="select"
           />
+          <v-alert
+            v-if="limitReached"
+            type="info"
+            variant="tonal"
+            density="compact"
+            class="operation-window-limit"
+          >
+            {{ locale.t("$vuetify.chatroom.operations.windowLimit") }}
+          </v-alert>
+          <div
+            v-if="hasMore || loadingMore"
+            ref="loadSentinel"
+            class="operation-load-sentinel"
+            aria-hidden="true"
+          >
+            <v-progress-circular
+              v-if="loadingMore"
+              indeterminate
+              size="20"
+              width="2"
+            />
+          </div>
         </div>
       </v-card>
     </div>
@@ -192,11 +200,13 @@ async function clearHistory() {
     </div>
   </div>
 
-  <v-dialog v-model="clearDialog" width="auto" max-width="90vw">
+  <v-dialog v-model="clearDialog" width="auto" max-width="32rem">
     <v-card>
-      <v-card-title>{{
-        locale.t("$vuetify.chatroom.operations.clearTitle")
-      }}</v-card-title>
+      <v-card-item prepend-icon="$mdiAlertCircleOutline" class="text-error">
+        <v-card-title>{{
+          locale.t("$vuetify.chatroom.operations.clearTitle")
+        }}</v-card-title>
+      </v-card-item>
       <v-card-text>{{
         locale.t("$vuetify.chatroom.operations.clearDescription")
       }}</v-card-text>

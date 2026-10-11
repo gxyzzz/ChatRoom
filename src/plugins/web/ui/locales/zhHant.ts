@@ -32,6 +32,11 @@ export const zhHantChatRoom: typeof enChatRoom = {
         description:
           "讀取完整工作區上下文，包括專案概況、預設提示詞、專案指令和 Skill 中繼資料。",
       },
+      workspace_file_get: {
+        title: "取得工作區檔案",
+        description:
+          "分塊讀取工作區檔案內容（UTF-8 文字或 Base64 二進位），或產生須登入 ChatRoom Web 才能使用的下載連結。",
+      },
       process_start: {
         title: "啟動行程",
         description: "啟動受管理行程並立即傳回 ProcessId。",
@@ -150,6 +155,7 @@ export const zhHantChatRoom: typeof enChatRoom = {
       completed: "對話上下文已壓縮",
       failed: "上下文壓縮未完成",
     },
+    fullAccessTitle: "啟用完全權限？",
     fullAccessConfirm:
       "完全權限允許 Agent 執行命令，並存取工作區以外的檔案和網路，不再逐項詢問一般權限。僅對可信任的任務啟用。確認啟用完全權限？",
     nativeOptions: {
@@ -286,6 +292,8 @@ export const zhHantChatRoom: typeof enChatRoom = {
   computer: {
     title: "電腦控制",
     platform: "平台",
+    noX11Session:
+      "未偵測到使用中的 X11 圖形工作階段。請在此裝置登入 X11 桌面後重新整理，無需重新啟動 ChatRoom。",
     helper: "原生輔助程式",
     access: "存取控制",
     enabled: "啟用電腦控制",
@@ -554,6 +562,20 @@ export const zhHantChatRoom: typeof enChatRoom = {
     parentDirectory: "上一層目錄",
     refresh: "重新整理目錄",
     loadMore: "載入更多檔案",
+    tableSummary: "{0} 列 · {1} 欄",
+    tableLimited: "僅顯示部分內容（最多 2 MiB、2000 列、100 欄）。",
+    column: "第 {0} 欄",
+    previousPage: "上一頁",
+    nextPage: "下一頁",
+    emptyTable: "空表格",
+    openOriginal: "開啟原始檔案",
+    download: "下載檔案",
+    downloadFailed: "下載失敗",
+    downloadRequested: "已請求下載",
+    preparingDownload: "正在準備下載…",
+    invalidDownload: "下載連結無效。",
+    downloadStarted: "若瀏覽器未自動開始下載，可以點選「下載檔案」重試。",
+    backToWorkspace: "返回工作區",
   },
   skills: {
     empty: "未發現 Skill。",
@@ -608,6 +630,7 @@ export const zhHantChatRoom: typeof enChatRoom = {
     workspaceList: "列出工作區",
     workspaceInfo: "讀取工作區資訊",
     workspaceCreate: "建立工作區",
+    workspaceFileGet: "取得工作區檔案",
     workspaceFileWrite: "寫入工作區檔案",
     workspaceAttachmentUpload: "上傳工作區附件",
     gitStage: "暫存 Git 修改",

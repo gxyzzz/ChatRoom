@@ -210,11 +210,13 @@ const confirmationDescription = computed(() =>
   <v-dialog
     :model-value="confirmationService !== null"
     width="auto"
-    max-width="90vw"
+    max-width="32rem"
     @update:model-value="!$event && (confirmationService = null)"
   >
     <v-card>
-      <v-card-title>{{ confirmationTitle }}</v-card-title>
+      <v-card-item prepend-icon="$mdiAlertCircleOutline" class="text-error">
+        <v-card-title>{{ confirmationTitle }}</v-card-title>
+      </v-card-item>
       <v-card-text>{{ confirmationDescription }}</v-card-text>
       <v-card-actions>
         <v-spacer />

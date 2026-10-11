@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { shallowRef, watch } from "vue";
+import { computed, shallowRef, watch } from "vue";
 import { useLocale } from "vuetify";
 import { bytes } from "../utils.js";
 import {
@@ -8,7 +8,10 @@ import {
   useWorkspaceFiles,
 } from "../composables/useWorkspaceFiles.js";
 import CodeViewer from "./CodeViewer.vue";
+import WorkspaceCsvPreview from "./WorkspaceCsvPreview.vue";
+import WorkspaceMediaPreview from "./WorkspaceMediaPreview.vue";
 import MarkdownContent from "./MarkdownContent.vue";
+import { workspaceDownloadUrl } from "../utils/workspace-download.js";
 
 const props = defineProps<{ root: string }>();
 const locale = useLocale();
@@ -46,6 +49,12 @@ watch(
     imageLoading.value = Boolean(url);
     imageError.value = false;
   },
+);
+
+const selectedFile = computed(() =>
+  entries.value.find(
+    (entry) => entry.path === selectedPath.value && entry.type === "file",
+  ),
 );
 
 function typeLabel(type: string): string {
@@ -142,101 +151,136 @@ function typeLabel(type: string): string {
         class="workspace-file-preview"
         :aria-busy="previewLoading || imageLoading"
       >
-        <v-progress-linear v-if="previewLoading" indeterminate />
-        <v-alert
-          v-if="file?.kind === 'text' && file.truncated"
-          type="warning"
-          variant="tonal"
-          density="compact"
-          class="workspace-preview-truncated"
-        >
-          {{ locale.t("$vuetify.chatroom.files.previewTruncated") }}
-        </v-alert>
-        <v-sheet
-          v-if="file?.kind === 'text' && isMarkdownFile(file.path)"
-          border
-          rounded="lg"
-          class="workspace-markdown-preview"
-        >
-          <div class="workspace-markdown-header">
-            <span class="workspace-markdown-path mono">{{ file.path }}</span>
-            <v-btn-toggle
-              v-model="markdownMode"
-              mandatory
-              density="compact"
-              variant="text"
-              divided
-              class="workspace-markdown-mode"
-            >
-              <v-btn value="preview" size="small">
-                {{ locale.t("$vuetify.chatroom.files.preview") }}
-              </v-btn>
-              <v-btn value="source" size="small">
-                {{ locale.t("$vuetify.chatroom.files.source") }}
-              </v-btn>
-            </v-btn-toggle>
-          </div>
-          <v-divider />
-          <div
-            v-if="markdownMode === 'preview'"
-            class="workspace-markdown-body"
+        <div v-if="selectedFile" class="workspace-preview-toolbar">
+          <span
+            class="workspace-preview-filename mono"
+            :title="selectedFile.path"
           >
-            <MarkdownContent :text="file.content" />
-          </div>
-          <div v-else class="workspace-markdown-source">
-            <CodeViewer
-              :text="file.content"
-              :filename="file.path"
-              :toolbar="false"
-            />
-          </div>
-        </v-sheet>
-        <CodeViewer
-          v-else-if="file?.kind === 'text'"
-          :text="file.content"
-          :filename="file.path"
-        />
-        <v-sheet
-          v-else-if="file?.kind === 'image'"
-          border
-          rounded="lg"
-          class="workspace-image-preview"
-        >
-          <div class="workspace-image-header mono">{{ file.path }}</div>
-          <v-divider />
-          <div class="workspace-image-stage">
-            <v-progress-linear v-if="imageLoading" indeterminate />
-            <v-empty-state
-              v-if="imageError"
-              icon="$mdiAlertCircleOutline"
-              :title="locale.t('$vuetify.chatroom.common.imageLoadFailed')"
-            />
-            <img
-              v-else
-              :key="file.url"
-              :src="file.url"
-              :alt="file.path"
-              decoding="async"
-              @load="imageLoading = false"
-              @error="
-                imageLoading = false;
-                imageError = true;
-              "
-            />
-          </div>
-        </v-sheet>
-        <v-empty-state
-          v-else-if="file?.kind === 'unsupported'"
-          icon="$mdiFileQuestionOutline"
-          :title="locale.t('$vuetify.chatroom.files.previewUnavailable')"
-          :text="file.path"
-        />
-        <v-empty-state
-          v-else-if="!previewLoading"
-          icon="$mdiFileEyeOutline"
-          :title="locale.t('$vuetify.chatroom.files.select')"
-          :text="locale.t('$vuetify.chatroom.files.readOnly')"
-        />
+            {{ selectedFile.path }}
+          </span>
+          <v-btn
+            size="small"
+            variant="tonal"
+            prepend-icon="$mdiDownloadOutline"
+            :href="workspaceDownloadUrl(props.root, selectedFile.path)"
+            :download="nameOf(selectedFile.path)"
+          >
+            {{ locale.t("$vuetify.chatroom.files.download") }}
+          </v-btn>
+        </div>
+        <div class="workspace-preview-content">
+          <v-progress-linear v-if="previewLoading" indeterminate />
+          <v-alert
+            v-if="file?.kind === 'text' && file.truncated"
+            type="warning"
+            variant="tonal"
+            density="compact"
+            class="workspace-preview-truncated"
+          >
+            {{ locale.t("$vuetify.chatroom.files.previewTruncated") }}
+          </v-alert>
+          <WorkspaceMediaPreview
+            v-if="
+              file &&
+              (file.kind === 'pdf' ||
+                file.kind === 'video' ||
+                file.kind === 'audio')
+            "
+            :key="file.url"
+            :kind="file.kind"
+            :path="file.path"
+            :url="file.url"
+          />
+          <WorkspaceCsvPreview
+            v-else-if="file?.kind === 'text' && /\.(csv|tsv)$/i.test(file.path)"
+            :content="file.content"
+            :path="file.path"
+            :truncated="file.truncated"
+          />
+          <v-sheet
+            v-else-if="file?.kind === 'text' && isMarkdownFile(file.path)"
+            border
+            rounded="lg"
+            class="workspace-markdown-preview"
+          >
+            <div class="workspace-markdown-header">
+              <v-btn-toggle
+                v-model="markdownMode"
+                mandatory
+                density="compact"
+                variant="text"
+                divided
+                class="workspace-markdown-mode"
+              >
+                <v-btn value="preview" size="small">
+                  {{ locale.t("$vuetify.chatroom.files.preview") }}
+                </v-btn>
+                <v-btn value="source" size="small">
+                  {{ locale.t("$vuetify.chatroom.files.source") }}
+                </v-btn>
+              </v-btn-toggle>
+            </div>
+            <v-divider />
+            <div
+              v-if="markdownMode === 'preview'"
+              class="workspace-markdown-body"
+            >
+              <MarkdownContent :text="file.content" />
+            </div>
+            <div v-else class="workspace-markdown-source">
+              <CodeViewer
+                :text="file.content"
+                :filename="file.path"
+                :toolbar="false"
+              />
+            </div>
+          </v-sheet>
+          <CodeViewer
+            v-else-if="file?.kind === 'text'"
+            :text="file.content"
+            :filename="file.path"
+            :show-download="false"
+          />
+          <v-sheet
+            v-else-if="file?.kind === 'image'"
+            border
+            rounded="lg"
+            class="workspace-image-preview"
+          >
+            <div class="workspace-image-stage">
+              <v-progress-linear v-if="imageLoading" indeterminate />
+              <v-empty-state
+                v-if="imageError"
+                icon="$mdiAlertCircleOutline"
+                :title="locale.t('$vuetify.chatroom.common.imageLoadFailed')"
+              />
+              <img
+                v-else
+                :key="file.url"
+                :src="file.url"
+                :alt="file.path"
+                decoding="async"
+                @load="imageLoading = false"
+                @error="
+                  imageLoading = false;
+                  imageError = true;
+                "
+              />
+            </div>
+          </v-sheet>
+          <v-empty-state
+            v-else-if="file?.kind === 'unsupported'"
+            icon="$mdiFileQuestionOutline"
+            :title="locale.t('$vuetify.chatroom.files.previewUnavailable')"
+            :text="file.path"
+          />
+          <v-empty-state
+            v-else-if="!previewLoading"
+            icon="$mdiFileEyeOutline"
+            :title="locale.t('$vuetify.chatroom.files.select')"
+            :text="locale.t('$vuetify.chatroom.files.readOnly')"
+          />
+        </div>
       </div>
     </div>
   </div>
