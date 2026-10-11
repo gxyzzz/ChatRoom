@@ -1,5 +1,10 @@
 <script setup lang="ts">
+import { defineAsyncComponent } from "vue";
 import { useLocale } from "vuetify";
+
+const WorkspacePdfPreview = defineAsyncComponent(
+  () => import("./WorkspacePdfPreview.vue"),
+);
 
 defineProps<{
   kind: "pdf" | "video" | "audio";
@@ -11,12 +16,7 @@ const locale = useLocale();
 
 <template>
   <div class="workspace-media-preview">
-    <iframe
-      v-if="kind === 'pdf'"
-      class="workspace-pdf-frame"
-      :src="url"
-      :title="path"
-    />
+    <WorkspacePdfPreview v-if="kind === 'pdf'" :url="url" :path="path" />
     <video
       v-else-if="kind === 'video'"
       :key="url"
@@ -49,14 +49,6 @@ const locale = useLocale();
   align-items: center;
   gap: 12px;
 }
-.workspace-pdf-frame {
-  width: 100%;
-  min-height: 0;
-  flex: 1 1 auto;
-  border: 0;
-  border-radius: 8px;
-  background: rgb(var(--v-theme-surface));
-}
 .workspace-video-player {
   width: 100%;
   max-height: 100%;
@@ -67,10 +59,5 @@ const locale = useLocale();
 .workspace-media-preview a {
   align-self: flex-end;
   font-size: 12px;
-}
-@media (max-width: 820px) {
-  .workspace-pdf-frame {
-    min-height: 70dvh;
-  }
 }
 </style>
