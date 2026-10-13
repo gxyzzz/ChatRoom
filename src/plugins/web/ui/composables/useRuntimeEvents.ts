@@ -1,4 +1,5 @@
-import { onBeforeUnmount, shallowRef } from "vue";
+import { onBeforeUnmount, shallowRef, watch } from "vue";
+import { rtcConnected } from "../transport/rtc.js";
 import { api, type RuntimeStatus, type UpdateStatus } from "../api.js";
 import { createRequestGate } from "../utils/requests.js";
 
@@ -112,6 +113,13 @@ export function useRuntimeEvents() {
   let pendingGlobalAgentEvent = false;
 
   const runtimeRequests = createRequestGate();
+
+  watch(rtcConnected, (connected) => {
+    if (!connected || !stream) return;
+    stream.close();
+    stream = null;
+    connectEvents();
+  });
 
   onBeforeUnmount(stop);
 

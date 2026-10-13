@@ -7,6 +7,8 @@ export interface ProcessStartRequest {
   args?: string[];
   env?: Record<string, string>;
   pty?: boolean;
+  cols?: number;
+  rows?: number;
   timeoutMs?: number;
 }
 

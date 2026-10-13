@@ -16,6 +16,15 @@ import { errorMessage } from "../utils/errors.js";
 import { createRequestGate } from "../utils/requests.js";
 import { createEntityRefreshQueue } from "../utils/entity-refresh-queue.js";
 
+const MAX_VISIBLE_OUTPUT = 512 * 1024;
+
+function appendOutput(current: string, delta: string): string {
+  const value = current + delta;
+  return value.length <= MAX_VISIBLE_OUTPUT
+    ? value
+    : "[earlier output truncated]\n" + value.slice(-MAX_VISIBLE_OUTPUT);
+}
+
 export function useProcesses(
   revision: WatchSource<number>,
   changes: () => ProcessRefreshHint[] | null,
@@ -32,6 +41,8 @@ export function useProcesses(
   const retryCounts = new Map<string, number>();
   const stopRequests = new Set<AbortController>();
   let selectionGeneration = 0;
+  let outputStream: EventSource | null = null;
+  let streamReady = false;
   let disposed = false;
   const refreshQueue = createEntityRefreshQueue<ProcessRefreshHint>({
     keyOf: (change) => change.processId,
@@ -45,6 +56,9 @@ export function useProcesses(
 
   onScopeDispose(() => {
     disposed = true;
+    outputStream?.close();
+    outputStream = null;
+    streamReady = false;
     initialLoaded = false;
     refreshQueue.reset();
     retryCounts.clear();
@@ -76,7 +90,15 @@ export function useProcesses(
   );
   watch(selected, () => {
     selectionGeneration += 1;
-    void loadDetail(selectionGeneration);
+    detailRequests.invalidate();
+    outputStream?.close();
+    outputStream = null;
+    streamReady = false;
+    const processId = selected.value;
+    if (!processId) return;
+    if (typeof EventSource === "undefined")
+      void loadDetail(selectionGeneration);
+    else connectOutput(processId, selectionGeneration);
   });
 
   async function loadInitial() {
@@ -97,7 +119,7 @@ export function useProcesses(
         !next.some((item) => item.processId === selected.value)
       ) {
         clearSelection();
-      } else if (selected.value) {
+      } else if (selected.value && !outputStream) {
         void loadDetail();
       }
     } catch (cause) {
@@ -124,6 +146,14 @@ export function useProcesses(
           return { processId: change.processId, deleted: true };
 
         try {
+          if (change.processId === selectedAtStart && streamReady)
+            return {
+              processId: change.processId,
+              deleted: false,
+              summary: null,
+              snapshot: null,
+            };
+
           if (change.processId === selectedAtStart) {
             const snapshot = await api<ProcessSnapshot>(
               `/processes/${encodeURIComponent(change.processId)}`,
@@ -196,7 +226,8 @@ export function useProcesses(
         patch.snapshot &&
         selected.value === patch.processId &&
         selectedAtStart === patch.processId &&
-        selectionGeneration === selectionAtStart
+        selectionGeneration === selectionAtStart &&
+        !streamReady
       ) {
         detailRequests.invalidate();
         detail.value = patch.snapshot;
@@ -219,6 +250,148 @@ export function useProcesses(
     error.value = errorMessage(cause);
   }
 
+  /** The selected process receives initial state once, then raw output chunks.
+   * The existing runtime events still refresh summaries of other processes.
+   */
+  function connectOutput(processId: string, generation: number) {
+    const source = new EventSource(
+      `/api/processes/${encodeURIComponent(processId)}/stream`,
+    );
+    outputStream = source;
+    const decoder = {
+      stdout: new TextDecoder(),
+      stderr: new TextDecoder(),
+    };
+    const buffered = { stdout: "", stderr: "" };
+    let outputTimer: ReturnType<typeof setTimeout> | null = null;
+    const active = () =>
+      !disposed &&
+      outputStream === source &&
+      selected.value === processId &&
+      selectionGeneration === generation;
+    const discardBuffer = () => {
+      if (outputTimer !== null) clearTimeout(outputTimer);
+      outputTimer = null;
+      buffered.stdout = "";
+      buffered.stderr = "";
+    };
+    const flushOutput = () => {
+      if (!active() || !streamReady || !detail.value) {
+        discardBuffer();
+        return;
+      }
+      if (!buffered.stdout && !buffered.stderr) return;
+      const next = { ...detail.value };
+      for (const key of ["stdout", "stderr"] as const) {
+        const delta = buffered[key];
+        if (!delta) continue;
+        next.outputTruncated ||=
+          next[key].length + delta.length > MAX_VISIBLE_OUTPUT;
+        next[key] = appendOutput(next[key], delta);
+      }
+      detail.value = next;
+      discardBuffer();
+    };
+    const failStream = () => {
+      discardBuffer();
+      streamReady = false;
+      source.close();
+      outputStream = null;
+      void loadDetail(generation);
+    };
+    source.addEventListener("snapshot", (event) => {
+      if (!active()) return;
+      try {
+        const snapshot = JSON.parse(
+          (event as MessageEvent).data,
+        ) as ProcessSnapshot;
+        discardBuffer();
+        decoder.stdout = new TextDecoder();
+        decoder.stderr = new TextDecoder();
+        detailRequests.invalidate();
+        detail.value = snapshot;
+        streamReady = snapshot.state === "running";
+        updateSummary(snapshot);
+        if (!streamReady) {
+          source.close();
+          outputStream = null;
+        }
+      } catch {
+        failStream();
+      }
+    });
+    source.addEventListener("output", (event) => {
+      if (!active() || !streamReady || !detail.value) return;
+      try {
+        const payload = JSON.parse((event as MessageEvent).data) as {
+          stream: "stdout" | "stderr";
+          bytes: string;
+        };
+        if (payload.stream !== "stdout" && payload.stream !== "stderr") return;
+        const raw = atob(payload.bytes);
+        const bytes = Uint8Array.from(raw, (char) => char.charCodeAt(0));
+        const text = decoder[payload.stream].decode(bytes, { stream: true });
+        if (!text) return;
+        buffered[payload.stream] += text;
+        if (buffered[payload.stream].length >= 64 * 1024) flushOutput();
+        else if (outputTimer === null)
+          outputTimer = setTimeout(flushOutput, 50);
+      } catch {
+        failStream();
+      }
+    });
+    source.addEventListener("exit", (event) => {
+      if (!active()) return;
+      try {
+        flushOutput();
+        const status = JSON.parse((event as MessageEvent).data) as Omit<
+          ProcessSnapshot,
+          "stdout" | "stderr"
+        >;
+        detailRequests.invalidate();
+        if (detail.value)
+          detail.value = {
+            ...detail.value,
+            ...status,
+            outputTruncated:
+              detail.value.outputTruncated || status.outputTruncated,
+          };
+        else void loadDetail(generation);
+        const index = items.value.findIndex(
+          (item) => item.processId === processId,
+        );
+        if (index >= 0) {
+          const next = [...items.value];
+          next[index] = summaryOf(status);
+          items.value = next;
+        }
+      } catch {
+        void loadDetail(generation);
+      } finally {
+        discardBuffer();
+        streamReady = false;
+        source.close();
+        outputStream = null;
+      }
+    });
+    source.onerror = () => {
+      if (!active()) return;
+      discardBuffer();
+      streamReady = false;
+      // EventSource automatically reconnects, yielding a fresh snapshot.
+    };
+  }
+
+  function updateSummary(snapshot: ProcessSnapshot) {
+    const index = items.value.findIndex(
+      (item) => item.processId === snapshot.processId,
+    );
+    if (index < 0) return;
+    const next = [...items.value];
+    next[index] = summaryOf(snapshot);
+    items.value = next;
+  }
+
   async function loadDetail(selectionAtStart = selectionGeneration) {
     const request = detailRequests.begin();
     const processId = selected.value;
@@ -234,7 +407,8 @@ export function useProcesses(
       if (
         detailRequests.isCurrent(request) &&
         selected.value === processId &&
-        selectionGeneration === selectionAtStart
+        selectionGeneration === selectionAtStart &&
+        !streamReady
       )
         detail.value = next;
     } catch (cause) {
@@ -283,6 +457,9 @@ export function useProcesses(
   }
 
   function clearSelection() {
+    outputStream?.close();
+    outputStream = null;
+    streamReady = false;
     selected.value = null;
     detail.value = null;
     detailRequests.invalidate();
@@ -323,7 +500,7 @@ type ProcessPatch =
       snapshot: ProcessSnapshot | null;
     };
 
-function summaryOf(snapshot: ProcessSnapshot): ProcessSummary {
+function summaryOf(snapshot: ProcessSummary): ProcessSummary {
   return {
     processId: snapshot.processId,
     command: snapshot.command,

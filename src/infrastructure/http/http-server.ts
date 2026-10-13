@@ -75,6 +75,7 @@ export class HttpServer {
         this.ingress,
         this.cloud,
         this.logs,
+        this.config,
         () => ({
           version: CHATROOM_VERSION,
           mcpRequests: this.mcpRequestCount,
@@ -106,6 +107,12 @@ export class HttpServer {
     const webIndexPath = path.join(webRoot, "index.html");
     if (existsSync(webIndexPath)) {
       const webIndex = readFileSync(webIndexPath, "utf8");
+      app.get("/transport-sw.js", (_req, res) => {
+        res.setHeader("Cache-Control", "no-store");
+        res.type("application/javascript").sendFile("transport-sw.js", {
+          root: webRoot,
+        });
+      });
       app.use(
         "/assets",
         express.static(path.join(webRoot, "assets"), {

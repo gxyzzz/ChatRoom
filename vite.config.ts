@@ -14,7 +14,7 @@ export default defineConfig({
     ],
   },
   root: "src/plugins/web/ui",
-  publicDir: false,
+  publicDir: "public",
   build: {
     outDir: "../../../../dist/web",
     emptyOutDir: false,

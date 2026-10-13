@@ -2,6 +2,7 @@
 import { ref, shallowRef } from "vue";
 import { useLocale } from "vuetify";
 import type { AgentItem } from "../api.js";
+import { downloadFile } from "../utils/download.js";
 
 type ImageArtifactItem = Extract<AgentItem, { type: "artifact" }>;
 
@@ -65,10 +66,7 @@ function openPreview(item: ImageArtifactItem) {
 
 function download(item: ImageArtifactItem) {
   if (!isLoaded(item)) return;
-  const anchor = document.createElement("a");
-  anchor.href = endpoint(item);
-  anchor.download = item.artifact.name;
-  anchor.click();
+  void downloadFile(endpoint(item), item.artifact.name).catch(() => {});
 }
 </script>
 

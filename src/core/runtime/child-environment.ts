@@ -1,31 +1,34 @@
-const CHILD_ENV_KEYS = new Set([
-  "PATH",
-  "HOME",
-  "USER",
-  "LOGNAME",
-  "SHELL",
-  "LANG",
-  "LANGUAGE",
-  "TERM",
-  "COLORTERM",
-  "TMPDIR",
-  "TMP",
-  "TEMP",
-  "XDG_CONFIG_HOME",
-  "XDG_CACHE_HOME",
-  "XDG_DATA_HOME",
-  "XDG_STATE_HOME",
-  "XDG_RUNTIME_DIR",
-  "NVM_DIR",
-  "NVM_BIN",
-  "SystemRoot",
-  "WINDIR",
-  "ComSpec",
-  "PATHEXT",
-  "USERPROFILE",
-  "LOCALAPPDATA",
-  "APPDATA",
-]);
+// Restrict environment inheritance for MCP-controlled and other supervised processes.
+const CHILD_ENV_KEYS = new Set(
+  [
+    "PATH",
+    "HOME",
+    "USER",
+    "LOGNAME",
+    "SHELL",
+    "LANG",
+    "LANGUAGE",
+    "TERM",
+    "COLORTERM",
+    "TMPDIR",
+    "TMP",
+    "TEMP",
+    "XDG_CONFIG_HOME",
+    "XDG_CACHE_HOME",
+    "XDG_DATA_HOME",
+    "XDG_STATE_HOME",
+    "XDG_RUNTIME_DIR",
+    "NVM_DIR",
+    "NVM_BIN",
+    "SystemRoot",
+    "WINDIR",
+    "ComSpec",
+    "PATHEXT",
+    "USERPROFILE",
+    "LOCALAPPDATA",
+    "APPDATA",
+  ].map((key) => key.toUpperCase()),
+);
 
 export function childEnvironment(
   overrides: Record<string, string> | undefined,
@@ -34,7 +37,7 @@ export function childEnvironment(
   for (const [key, value] of Object.entries(process.env)) {
     if (
       value !== undefined &&
-      (CHILD_ENV_KEYS.has(key) || key.startsWith("LC_"))
+      (CHILD_ENV_KEYS.has(key.toUpperCase()) || key.startsWith("LC_"))
     )
       env[key] = value;
   }

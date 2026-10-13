@@ -3,6 +3,7 @@ import { computed, defineAsyncComponent, shallowRef } from "vue";
 import { useLocale } from "vuetify";
 import { workspaceDownloadUrl } from "../utils/workspace-download.js";
 import { filePreviewKind } from "../composables/useWorkspaceFiles.js";
+import { downloadFile, DownloadHttpError } from "../utils/download.js";
 
 const WorkspaceDownloadPreview = defineAsyncComponent(
   () => import("./WorkspaceDownloadPreview.vue"),
@@ -52,20 +53,13 @@ async function download() {
   busy.value = true;
   error.value = "";
   try {
-    const response = await fetch(url, { method: "HEAD", cache: "no-store" });
-    if (!response.ok) {
-      if (response.status === 401) {
-        window.location.reload();
-        return;
-      }
-      throw new Error(`${response.status} ${response.statusText}`);
-    }
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = fileName || "download";
-    anchor.click();
+    await downloadFile(url, fileName || "download");
     started.value = true;
   } catch (cause) {
+    if (cause instanceof DownloadHttpError && cause.status === 401) {
+      window.location.reload();
+      return;
+    }
     error.value = cause instanceof Error ? cause.message : String(cause);
   } finally {
     busy.value = false;

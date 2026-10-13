@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { onMounted, onUnmounted, shallowRef } from "vue";
 import { useLocale } from "vuetify";
 import type { ProcessSummary } from "../api.js";
 import { appIntlLocale } from "../locales.js";
@@ -17,6 +18,19 @@ defineEmits<{
 }>();
 
 const locale = useLocale();
+const now = shallowRef(Date.now());
+let ticker: ReturnType<typeof setInterval> | null = null;
+onMounted(() => {
+  ticker = setInterval(() => (now.value = Date.now()), 1000);
+});
+onUnmounted(() => {
+  if (ticker) clearInterval(ticker);
+});
+function elapsed(item: ProcessSummary): number {
+  return item.state === "running"
+    ? Math.max(0, now.value - Date.parse(item.startedAt))
+    : item.durationMs;
+}
 </script>
 
 <template>
@@ -92,7 +106,7 @@ const locale = useLocale();
             {{ dateTime(item.startedAt, appIntlLocale(locale.current.value)) }}
           </div>
           <div class="process-record-duration" role="gridcell">
-            {{ duration(item.durationMs) }}
+            {{ duration(elapsed(item)) }}
           </div>
         </div>
         <div class="process-record-side" role="gridcell">

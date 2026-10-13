@@ -9,6 +9,7 @@ import {
   nameOf,
 } from "../composables/useWorkspaceFiles.js";
 import { workspaceDownloadUrl } from "../utils/workspace-download.js";
+import { downloadFile } from "../utils/download.js";
 import CodeViewer from "./CodeViewer.vue";
 import MarkdownContent from "./MarkdownContent.vue";
 import WorkspaceCsvPreview from "./WorkspaceCsvPreview.vue";
@@ -26,6 +27,13 @@ const fileUrl = computed(() => {
     path: props.path,
   })}`;
 });
+function download(): void {
+  void downloadFile(
+    workspaceDownloadUrl(props.workspace, props.path),
+    fileName.value,
+  ).catch(() => {});
+}
+
 const content = shallowRef<WorkspaceFileContent | null>(null);
 const loading = shallowRef(false);
 const error = shallowRef("");
@@ -68,8 +76,7 @@ watch(
         <v-btn
           variant="text"
           prepend-icon="$mdiDownloadOutline"
-          :href="workspaceDownloadUrl(workspace, path)"
-          :download="fileName"
+          @click="download"
         >
           {{ locale.t("$vuetify.chatroom.files.download") }}
         </v-btn>

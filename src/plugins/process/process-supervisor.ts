@@ -26,6 +26,9 @@ interface ManagedProcess {
   timeout: NodeJS.Timeout | null;
   forceTimeout: NodeJS.Timeout | null;
   outputEventTimer: NodeJS.Timeout | null;
+  outputListeners: Set<
+    (chunk: Buffer | null, stream?: "stdout" | "stderr") => void
+  >;
   timedOut: boolean;
   operationId: string;
   settled: Promise<ProcessSnapshot>;
@@ -75,6 +78,7 @@ export class ProcessSupervisor {
           args,
           cwd: request.cwd,
           pty: request.pty ?? false,
+          ...(request.pty ? { cols: request.cols, rows: request.rows } : {}),
           timeoutMs: request.timeoutMs ?? this.defaultTimeoutMs,
           env: request.env ?? {},
         },
@@ -87,6 +91,8 @@ export class ProcessSupervisor {
       ).start(request.command, args, {
         cwd: request.cwd,
         env: childEnvironment(request.env),
+        ...(request.cols !== undefined ? { cols: request.cols } : {}),
+        ...(request.rows !== undefined ? { rows: request.rows } : {}),
       });
     } catch (error) {
       if (!adoptedOperation)
@@ -133,6 +139,7 @@ export class ProcessSupervisor {
       timeout: null,
       forceTimeout: null,
       outputEventTimer: null,
+      outputListeners: new Set(),
       timedOut: false,
       operationId,
       settled,
@@ -184,6 +191,30 @@ export class ProcessSupervisor {
     item.backend.write(data);
     return this.snapshotOf(processId, item);
   }
+  /** Subscribe to raw PTY output; terminal reconnects start from the snapshot. */
+  subscribeOutput(
+    processId: ProcessId,
+    listener: (chunk: Buffer | null, stream?: "stdout" | "stderr") => void,
+  ): { snapshot: ProcessSnapshot; unsubscribe: () => void } {
+    const item = this.require(processId);
+    item.outputListeners.add(listener);
+    return {
+      snapshot: this.snapshotOf(processId, item),
+      unsubscribe: () => item.outputListeners.delete(listener),
+    };
+  }
+  resize(processId: ProcessId, cols: number, rows: number): void {
+    const item = this.requireRunning(processId);
+    if (!item.request.pty || !item.backend.resize)
+      throw new ChatRoomError("UNSUPPORTED", "Not a resizable PTY");
+    if (
+      ![cols, rows].every(
+        (value) => Number.isInteger(value) && value >= 2 && value <= 500,
+      )
+    )
+      throw new ChatRoomError("INVALID_INPUT", "Invalid terminal dimensions");
+    item.backend.resize(cols, rows);
+  }
   kill(processId: ProcessId, force = false): ProcessSnapshot {
     const item = this.requireRunning(processId);
     item.backend.kill(force ? "SIGKILL" : "SIGTERM");
@@ -220,6 +251,7 @@ export class ProcessSupervisor {
     const item = this.processes.get(processId);
     if (!item || item.state !== "running") return;
     (stream === "stdout" ? item.stdout : item.stderr).append(chunk);
+    for (const listener of item.outputListeners) listener(chunk, stream);
     if (!item.outputEventTimer) {
       item.outputEventTimer = setTimeout(() => {
         item.outputEventTimer = null;
@@ -242,6 +274,8 @@ export class ProcessSupervisor {
     item.exitCode = exitCode;
     item.signal = signal;
     item.state = signal ? "killed" : exitCode === 0 ? "exited" : "failed";
+    for (const listener of item.outputListeners) listener(null);
+    item.outputListeners.clear();
     const snapshot = this.snapshotOf(processId, item);
     this.operations.finish(
       item.operationId,

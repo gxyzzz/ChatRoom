@@ -2,6 +2,7 @@ import { onBeforeUnmount, onMounted, shallowRef, watch } from "vue";
 import { api, type LogLevel, type LogPage, type LogRecord } from "../api.js";
 import { errorMessage } from "../utils/errors.js";
 import { createRequestGate } from "../utils/requests.js";
+import { rtcConnected } from "../transport/rtc.js";
 
 const PAGE_SIZE = 100;
 const MAX_VISIBLE_RECORDS = 1000;
@@ -22,6 +23,10 @@ export function useSystemLogs() {
   const liveDuringLoad = new Map<string, LogRecord>();
   let stream: EventSource | null = null;
   let ready = false;
+
+  watch(rtcConnected, (connected) => {
+    if (connected && ready) connectStream();
+  });
 
   watch([level, module], () => {
     if (ready) void loadInitial();

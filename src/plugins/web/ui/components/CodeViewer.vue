@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, shallowRef, watch } from "vue";
 import { useLocale } from "vuetify";
+import { downloadContent } from "../utils/download.js";
 
 const HIGHLIGHT_MAX_CHARS = 200_000;
 const SEARCH_DEBOUNCE_MS = 120;
@@ -98,14 +99,10 @@ async function copy() {
   }
 }
 function download() {
-  const url = URL.createObjectURL(
+  downloadContent(
     new Blob([source.value], { type: "text/plain;charset=utf-8" }),
+    props.filename,
   );
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = props.filename;
-  a.click();
-  URL.revokeObjectURL(url);
 }
 </script>
 

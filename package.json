@@ -1,6 +1,6 @@
 {
   "name": "@zhanguym/chatroom",
-  "version": "1.1.0-beta.1",
+  "version": "1.2.0-beta.0",
   "type": "module",
   "description": "Local MCP runtime for ChatGPT with workspace, process, Cloud, and WebUI controls.",
   "bin": {
@@ -26,12 +26,15 @@
     "build:native:macos": "node scripts/build-native-macos.mjs",
     "build:native:windows": "node scripts/build-native-windows.mjs",
     "build:native:linux": "node scripts/build-native-linux.mjs",
-    "clean:all": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\""
+    "clean:all": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "postinstall": "node scripts/ensure-pty-helper.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/node": "^2.0.0",
     "@modelcontextprotocol/server": "^2.0.0",
     "@simplewebauthn/server": "13.3.2",
+    "@xterm/addon-fit": "0.11.0",
+    "@xterm/xterm": "6.0.0",
     "compression": "^1.8.2",
     "express": "^5.1.0",
     "pdfjs-dist": "6.4.299",
@@ -39,6 +42,7 @@
     "zod": "^4.0.17"
   },
   "optionalDependencies": {
+    "node-datachannel": "^0.33.4",
     "node-pty": "^1.1.0"
   },
   "devDependencies": {
@@ -76,12 +80,13 @@
   },
   "publishConfig": {
     "access": "public",
-    "tag": "latest"
+    "tag": "beta"
   },
   "files": [
     "dist",
     "assets",
-    "chatroom.config.example.json"
+    "chatroom.config.example.json",
+    "scripts/ensure-pty-helper.mjs"
   ],
   "imports": {
     "#app/*": {

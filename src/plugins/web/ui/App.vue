@@ -1,8 +1,30 @@
 <script setup lang="ts">
-import { computed, shallowRef, watch } from "vue";
+import {
+  computed,
+  defineAsyncComponent,
+  onBeforeUnmount,
+  onMounted,
+  shallowRef,
+  watch,
+} from "vue";
 import { useDisplay, useLocale } from "vuetify";
 import LoginView from "./components/LoginView.vue";
+const TerminalView = defineAsyncComponent(
+  () => import("./components/TerminalView.vue"),
+);
+import {
+  rtcConnected,
+  rtcIceRoute,
+  startRtc,
+  stopRtc,
+} from "./transport/rtc.js";
 import WorkspaceDownloadPage from "./components/WorkspaceDownloadPage.vue";
+import {
+  downloadProgress,
+  cancelDownload,
+  dismissDownload,
+} from "./utils/download.js";
+import { bytes } from "./utils.js";
 import PasskeyManagerDialog from "./components/PasskeyManagerDialog.vue";
 import { useAppNavigation, type View } from "./composables/useAppNavigation.js";
 import { useAppPreferences } from "./composables/useAppPreferences.js";
@@ -13,15 +35,66 @@ const locale = useLocale();
 const isDownloadPage = window.location.pathname === "/download";
 const display = useDisplay();
 const drawer = shallowRef(!display.smAndDown.value);
+const terminalVisible = shallowRef(false);
+const terminalActivated = shallowRef(false);
+const terminalHeight = shallowRef(300);
+let stopTerminalResize: (() => void) | null = null;
+function toggleTerminal(): void {
+  terminalVisible.value = !terminalVisible.value;
+  if (terminalVisible.value) terminalActivated.value = true;
+}
+function beginTerminalResize(event: PointerEvent): void {
+  if (event.button !== 0) return;
+  event.preventDefault();
+  stopTerminalResize?.();
+  const startY = event.clientY;
+  const original = terminalHeight.value;
+  const resize = (next: PointerEvent) => {
+    terminalHeight.value = Math.max(
+      145,
+      Math.min(window.innerHeight * 0.75, original + startY - next.clientY),
+    );
+  };
+  const stop = () => {
+    window.removeEventListener("pointermove", resize);
+    window.removeEventListener("pointerup", stop);
+    window.removeEventListener("pointercancel", stop);
+    stopTerminalResize = null;
+  };
+  stopTerminalResize = stop;
+  window.addEventListener("pointermove", resize);
+  window.addEventListener("pointerup", stop);
+  window.addEventListener("pointercancel", stop);
+}
+function terminalShortcut(event: KeyboardEvent): void {
+  if (
+    event.code !== "Backquote" ||
+    !(event.ctrlKey || event.metaKey) ||
+    event.altKey ||
+    isDownloadPage ||
+    !authenticated.value
+  )
+    return;
+  event.preventDefault();
+  toggleTerminal();
+}
+onMounted(() => window.addEventListener("keydown", terminalShortcut));
+onBeforeUnmount(() => {
+  stopTerminalResize?.();
+  window.removeEventListener("keydown", terminalShortcut);
+});
+
 const navigation = useAppNavigation(!isDownloadPage);
 const runtimeState = useRuntimeEvents();
 const preferences = useAppPreferences();
 const auth = useAuthSession({
   onAuthenticated: () => {
     if (!isDownloadPage) runtimeState.start();
+    startRtc();
   },
   onSignedOut: () => {
     runtimeState.clear();
+    stopRtc();
     if (!isDownloadPage) navigation.reset();
     drawer.value = !display.smAndDown.value;
   },
@@ -290,6 +363,16 @@ function formatUptime(totalMinutes: number): string {
           {{ currentTitle }}
         </v-app-bar-title>
         <template #append>
+          <v-btn
+            icon="$mdiConsoleLine"
+            class="me-3"
+            size="small"
+            variant="text"
+            :active="terminalVisible"
+            :aria-label="locale.t('$vuetify.chatroom.terminal.title')"
+            :aria-pressed="terminalVisible"
+            @click="toggleTerminal"
+          />
           <div
             class="connection-state"
             :data-state="connectionState"
@@ -308,15 +391,36 @@ function formatUptime(totalMinutes: number): string {
               >
                 · {{ latencyMs }} ms
               </template>
+              <template v-if="rtcConnected">
+                ·
+                <span :title="rtcIceRoute ? `ICE: ${rtcIceRoute}` : ''"
+                  >P2P</span
+                >
+              </template>
             </span>
           </div>
         </template>
       </v-app-bar>
 
-      <v-main>
+      <v-main :class="{ 'app-main--terminal-visible': terminalVisible }">
         <v-container fluid class="app-content">
           <component :is="currentComponent" v-bind="currentProps" />
         </v-container>
+        <section
+          v-if="terminalActivated"
+          v-show="terminalVisible"
+          class="app-terminal-panel"
+          :style="{ height: terminalHeight + 'px' }"
+        >
+          <div
+            class="app-terminal-resize"
+            role="separator"
+            aria-orientation="horizontal"
+            :aria-label="locale.t('$vuetify.chatroom.terminal.resize')"
+            @pointerdown="beginTerminalResize"
+          />
+          <TerminalView :visible="terminalVisible" @hide="toggleTerminal" />
+        </section>
       </v-main>
     </template>
 
@@ -343,6 +447,64 @@ function formatUptime(totalMinutes: number): string {
       <v-progress-circular indeterminate color="primary" />
     </v-main>
 
+    <v-snackbar
+      :model-value="downloadProgress !== null"
+      :timeout="-1"
+      location="bottom end"
+      color="surface"
+      elevation="4"
+    >
+      <template v-if="downloadProgress">
+        <div class="text-body-2 text-truncate" :title="downloadProgress.name">
+          {{ downloadProgress.name }}
+        </div>
+        <div class="text-caption text-medium-emphasis">
+          {{
+            locale.t(
+              `$vuetify.chatroom.files.downloadPhase.${downloadProgress.phase}`,
+            )
+          }}
+          <template v-if="downloadProgress.phase === 'transferring'">
+            · {{ downloadProgress.mode === "p2p" ? "P2P" : "HTTP" }} ·
+            {{ bytes(downloadProgress.received) }}
+            <template v-if="downloadProgress.total !== null">
+              / {{ bytes(downloadProgress.total) }}
+            </template>
+            · {{ bytes(downloadProgress.speed) }}/s
+          </template>
+          <template v-if="downloadProgress.error">
+            · {{ downloadProgress.error }}
+          </template>
+        </div>
+        <v-progress-linear
+          v-if="downloadProgress.phase === 'transferring'"
+          class="mt-2"
+          color="primary"
+          :model-value="
+            downloadProgress.total !== null && downloadProgress.total > 0
+              ? (downloadProgress.received / downloadProgress.total) * 100
+              : 0
+          "
+          :indeterminate="downloadProgress.total === null"
+          height="3"
+          rounded
+        />
+      </template>
+      <template #actions>
+        <v-btn
+          v-if="downloadProgress?.phase === 'transferring'"
+          variant="text"
+          size="small"
+          @click="cancelDownload"
+        >
+          {{ locale.t("$vuetify.chatroom.common.cancel") }}
+        </v-btn>
+        <v-btn v-else variant="text" size="small" @click="dismissDownload">
+          {{ locale.t("$vuetify.chatroom.common.close") }}
+        </v-btn>
+      </template>
+    </v-snackbar>
+
     <PasskeyManagerDialog
       v-model:open="passkeyDialog"
       v-model:name="passkeyName"
@@ -354,3 +516,46 @@ function formatUptime(totalMinutes: number): string {
     />
   </v-app>
 </template>
+
+<style scoped>
+.app-main--terminal-visible {
+  display: flex;
+  flex-direction: column;
+  block-size: calc(
+    100dvh - var(--v-layout-top, 0px) - var(--v-layout-bottom, 0px)
+  );
+  min-block-size: 0;
+  overflow: hidden;
+}
+.app-main--terminal-visible > .app-content {
+  flex: 1 1 auto;
+  min-block-size: 0;
+  overflow: auto;
+}
+.app-terminal-panel {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-top: 1px solid rgb(var(--v-theme-outline), 0.16);
+  background: rgb(var(--v-theme-surface));
+}
+.app-terminal-resize {
+  position: relative;
+  flex: 0 0 6px;
+  cursor: row-resize;
+  touch-action: none;
+}
+.app-terminal-resize::after {
+  content: "";
+  position: absolute;
+  inset-block-start: 2px;
+  inset-inline-start: 48%;
+  inline-size: 4%;
+  block-size: 2px;
+  border-radius: 2px;
+  background: rgb(var(--v-theme-on-surface), 0.22);
+}
+</style>

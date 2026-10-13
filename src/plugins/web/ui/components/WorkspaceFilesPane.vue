@@ -12,6 +12,7 @@ import WorkspaceCsvPreview from "./WorkspaceCsvPreview.vue";
 import WorkspaceMediaPreview from "./WorkspaceMediaPreview.vue";
 import MarkdownContent from "./MarkdownContent.vue";
 import { workspaceDownloadUrl } from "../utils/workspace-download.js";
+import { downloadFile } from "../utils/download.js";
 
 const props = defineProps<{ root: string }>();
 const locale = useLocale();
@@ -56,6 +57,14 @@ const selectedFile = computed(() =>
     (entry) => entry.path === selectedPath.value && entry.type === "file",
   ),
 );
+
+function downloadSelected(): void {
+  if (!selectedFile.value) return;
+  const path = selectedFile.value.path;
+  void downloadFile(workspaceDownloadUrl(props.root, path), nameOf(path)).catch(
+    () => {},
+  );
+}
 
 function typeLabel(type: string): string {
   if (type === "file") return locale.t("$vuetify.chatroom.files.file");
@@ -162,8 +171,7 @@ function typeLabel(type: string): string {
             size="small"
             variant="tonal"
             prepend-icon="$mdiDownloadOutline"
-            :href="workspaceDownloadUrl(props.root, selectedFile.path)"
-            :download="nameOf(selectedFile.path)"
+            @click="downloadSelected"
           >
             {{ locale.t("$vuetify.chatroom.files.download") }}
           </v-btn>

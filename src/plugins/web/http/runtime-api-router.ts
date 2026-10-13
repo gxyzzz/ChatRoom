@@ -33,7 +33,7 @@ export function createRuntimeApiRouter(
     );
   });
 
-  router.get("/events", (req, res) => {
+  router.get("/events", (_req, res) => {
     res.status(200);
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache, no-transform");
@@ -47,7 +47,7 @@ export function createRuntimeApiRouter(
     });
     const keepalive = setInterval(() => res.write(": keepalive\n\n"), 15000);
     keepalive.unref();
-    req.on("close", () => {
+    res.on("close", () => {
       clearInterval(keepalive);
       unsubscribe();
     });

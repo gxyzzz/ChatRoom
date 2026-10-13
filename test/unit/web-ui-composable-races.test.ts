@@ -230,6 +230,100 @@ test("Process realtime patch wins over stale detail and disposal stops queued pa
   }
 });
 
+test("Process stream merges output without repeated snapshots and resynchronizes", async () => {
+  const previous = globalThis.EventSource;
+  const streams: FakeProcessStream[] = [];
+  class FakeProcessStream {
+    readonly listeners = new Map<string, EventListener>();
+    closed = false;
+    onerror: ((event: Event) => void) | null = null;
+
+    constructor(readonly url: string) {
+      streams.push(this);
+    }
+
+    addEventListener(type: string, listener: EventListener): void {
+      this.listeners.set(type, listener);
+    }
+
+    emit(type: string, payload: unknown): void {
+      this.listeners.get(type)?.({
+        data: JSON.stringify(payload),
+      } as MessageEvent);
+    }
+
+    close(): void {
+      this.closed = true;
+    }
+  }
+  globalThis.EventSource = FakeProcessStream as unknown as typeof EventSource;
+  const http = installHttpHarness();
+  const revision = ref(0);
+  const changes = ref([
+    { processId: "a", output: true, summary: false, deleted: false },
+  ]);
+  const scope = effectScope();
+  const state = scope.run(() => useProcesses(revision, () => changes.value))!;
+
+  try {
+    await flush();
+    http.requests[0]!.resolve([processSummary("a")]);
+    await flush();
+    state.select("a");
+    await flush();
+    assert.equal(streams[0]?.url, "/api/processes/a/stream");
+    assert.equal(http.requests.length, 1);
+
+    const stream = streams[0]!;
+    stream.emit("snapshot", processSnapshot("a", "start"));
+    const chinese = Buffer.from("中");
+    stream.emit("output", {
+      stream: "stdout",
+      bytes: chinese.subarray(0, 2).toString("base64"),
+    });
+    stream.emit("output", {
+      stream: "stdout",
+      bytes: chinese.subarray(2).toString("base64"),
+    });
+    await new Promise((resolve) => setTimeout(resolve, 75));
+    await flush();
+    assert.equal(state.detail.value?.stdout, "start中");
+
+    revision.value += 1;
+    await flush();
+    assert.equal(
+      http.requests.length,
+      1,
+      "Output events should not fetch full process snapshots",
+    );
+
+    stream.onerror?.(new Event("error"));
+    stream.emit("snapshot", processSnapshot("a", "recovered"));
+    stream.emit("output", {
+      stream: "stdout",
+      bytes: Buffer.from("-next").toString("base64"),
+    });
+    const final = {
+      ...processSnapshot("a", "ignored"),
+      state: "exited" as const,
+    };
+    const { stdout: _stdout, stderr: _stderr, ...status } = final;
+    stream.emit("exit", status);
+    await flush();
+    assert.equal(state.detail.value?.stdout, "recovered-next");
+    assert.equal(state.detail.value?.state, "exited");
+    assert.equal(state.items.value[0]?.state, "exited");
+    assert.equal(stream.closed, true);
+    assert.equal(http.requests.length, 1);
+  } finally {
+    scope.stop();
+    http.restore();
+    if (previous === undefined)
+      Reflect.deleteProperty(globalThis, "EventSource");
+    else globalThis.EventSource = previous;
+  }
+});
+
 test("Operation realtime patch keeps server paging offset stable and wins over stale detail", async () => {
   const http = installHttpHarness();
   const revision = ref(0);

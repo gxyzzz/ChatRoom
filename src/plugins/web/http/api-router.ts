@@ -9,6 +9,7 @@ import {
   requireString,
 } from "#presentation/http/http-utils";
 import { createProcessApiRouter } from "./process-api-router.js";
+import { createTerminalApiRouter } from "./terminal-api-router.js";
 import { createWorkspaceApiRouter } from "./workspace-api-router.js";
 import { createGitApiRouter } from "./git-api-router.js";
 import type { IngressPolicy } from "#auth/ingress-policy";
@@ -24,6 +25,8 @@ import { createRuntimeApiRouter } from "./runtime-api-router.js";
 import { createLogsApiRouter } from "./logs-api-router.js";
 import { createAgentApiRouter } from "./agent-api-router.js";
 import type { LogService } from "#core/logging/types";
+import type { ChatRoomConfig } from "#config/types";
+import { createRtcApiRouter } from "./rtc-api-router.js";
 
 export function createApiRouter(
   application: WebRuntime,
@@ -33,6 +36,7 @@ export function createApiRouter(
   ingress: IngressPolicy,
   cloud: CloudController,
   logs: LogService,
+  config: ChatRoomConfig,
   runtimeStatus: () => {
     version: string;
     mcpRequests: number;
@@ -43,6 +47,7 @@ export function createApiRouter(
   router.use(createPublicAuthApiRouter(auth, passkeys, ingress, logs));
   router.use(apiAuthentication(auth, ingress));
   router.use(createPrivateAuthApiRouter(passkeys, ingress, logs));
+  router.use(createRtcApiRouter(config));
   router.use(createRuntimeApiRouter(application, eventBus, runtimeStatus));
   router.use(createLogsApiRouter(logs));
 
@@ -80,6 +85,7 @@ export function createApiRouter(
   router.use(createWorkspaceApiRouter(application));
   router.use(createGitApiRouter(application));
   router.use(createProcessApiRouter(application));
+  router.use(createTerminalApiRouter(application));
   router.use(createAgentApiRouter(application.agents));
   router.use(
     createComputerApiRouter(

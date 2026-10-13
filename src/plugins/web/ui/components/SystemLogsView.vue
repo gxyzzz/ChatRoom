@@ -314,7 +314,7 @@ function backToLogs() {
 .system-log-header {
   padding: 6px 12px;
   border-bottom: 1px solid rgb(var(--v-theme-outline), 0.08);
-  background: rgb(var(--v-theme-on-surface), 0.018);
+  background: rgb(var(--v-theme-surface));
   color: rgb(var(--v-theme-on-surface), 0.46);
   font-size: 11px;
   font-weight: 600;

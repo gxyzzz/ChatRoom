@@ -28,7 +28,7 @@ export function createLogsApiRouter(logs: LogService): Router {
     }),
   );
 
-  router.get("/logs/stream", (req, res) => {
+  router.get("/logs/stream", (_req, res) => {
     res.status(200);
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache, no-transform");
@@ -42,7 +42,7 @@ export function createLogsApiRouter(logs: LogService): Router {
     });
     const keepalive = setInterval(() => res.write(": keepalive\n\n"), 15000);
     keepalive.unref();
-    req.on("close", () => {
+    res.on("close", () => {
       clearInterval(keepalive);
       unsubscribe();
     });

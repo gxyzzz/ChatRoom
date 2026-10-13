@@ -3,12 +3,18 @@ import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import test from "node:test";
 import { CLOUD_LEASE_SCHEMA } from "../../src/plugins/cloud/types.js";
+import { CloudTunnelClient } from "../../src/plugins/cloud/tunnel-client.js";
 import {
-  CloudTunnelClient,
-  parseTunnelControlMessage,
-} from "../../src/plugins/cloud/tunnel-client.js";
+  decodeFrame,
+  encodeFrame,
+  metaFrame,
+  Op,
+  creditFrame,
+  CreditSender,
+  DATA_SIZE,
+} from "../../src/plugins/cloud/v2/stream.js";
 
-test("Cloud tunnel pins forwarded Host to the leased public origin", async () => {
+test("V2 device tunnel pins HTTP Host to its leased public origin", async () => {
   let resolveHost!: (host: string | undefined) => void;
   const receivedHost = new Promise<string | undefined>((resolve) => {
     resolveHost = resolve;
@@ -43,28 +49,19 @@ test("Cloud tunnel pins forwarded Host to the leased public origin", async () =>
       onError() {},
     },
   );
-
   try {
     const internal = client as unknown as {
-      openStream(message: {
-        type: "open";
-        streamId: number;
-        service: "web";
-        method: string;
-        path: string;
-        headers: Record<string, string>;
-      }): void;
-      handleControl(message: { type: "end"; streamId: number }): void;
+      handleFrame(raw: Uint8Array): void;
     };
-    internal.openStream({
-      type: "open",
-      streamId: 1,
-      service: "web",
-      method: "GET",
-      path: "/api/runtime",
-      headers: { host: "localhost" },
-    });
-    internal.handleControl({ type: "end", streamId: 1 });
+    internal.handleFrame(
+      metaFrame(Op.OPEN, 1, {
+        service: "web",
+        method: "GET",
+        path: "/api/runtime",
+        headers: { host: "localhost" },
+      }),
+    );
+    internal.handleFrame(encodeFrame(Op.FIN, 1));
     assert.equal(await receivedHost, "web.example.com");
   } finally {
     client.stop();
@@ -73,42 +70,46 @@ test("Cloud tunnel pins forwarded Host to the leased public origin", async () =>
   }
 });
 
-test("Cloud tunnel control messages are validated before use", () => {
+test("V2 rejects invalid frames instead of accepting malformed control messages", () => {
   assert.deepEqual(
-    parseTunnelControlMessage(
-      JSON.stringify({
-        type: "open",
-        streamId: 7,
-        service: "web",
-        method: "GET",
-        path: "/api/runtime",
-        headers: { accept: "application/json" },
-      }),
-    ),
-    {
-      type: "open",
-      streamId: 7,
-      service: "web",
-      method: "GET",
-      path: "/api/runtime",
-      headers: { accept: "application/json" },
-    },
+    decodeFrame(metaFrame(Op.OPEN, 3, { service: "web" })).op,
+    Op.OPEN,
+  );
+  assert.throws(() => decodeFrame(new Uint8Array([1, 2])));
+  assert.throws(() =>
+    decodeFrame(encodeFrame(Op.DATA, 1, new Uint8Array(DATA_SIZE + 1))),
   );
   assert.throws(() =>
-    parseTunnelControlMessage(
-      JSON.stringify({
-        type: "open",
-        streamId: -1,
-        service: "admin",
-        method: "GET",
-        path: "/",
-        headers: {},
-      }),
-    ),
+    decodeFrame(encodeFrame(Op.FIN, 1, new Uint8Array([42]))),
   );
-  assert.throws(() =>
-    parseTunnelControlMessage(
-      JSON.stringify({ type: "ready", unexpected: true }),
-    ),
+  assert.throws(() => decodeFrame(encodeFrame(Op.OPEN, 0)));
+  assert.equal(decodeFrame(creditFrame(7, 1024)).id, 7);
+  assert.throws(() => creditFrame(7, 0));
+});
+
+test("V2 sender chunks data, respects flow credit and half-closes only after drain", () => {
+  const frames: Uint8Array[] = [];
+  const sender = new CreditSender(
+    1,
+    (frame) => frames.push(frame),
+    () => {},
+    () => {},
+  );
+  sender.enqueue(new Uint8Array(320_000));
+  sender.end();
+  assert.equal(
+    frames
+      .filter((frame) => decodeFrame(frame).op === Op.DATA)
+      .reduce((sum, frame) => sum + decodeFrame(frame).payload.byteLength, 0),
+    256 * 1024,
+  );
+  assert.equal(
+    frames.some((frame) => decodeFrame(frame).op === Op.FIN),
+    false,
+  );
+  sender.addCredit(64 * 1024);
+  assert.equal(
+    frames.some((frame) => decodeFrame(frame).op === Op.FIN),
+    true,
   );
 });

@@ -15,6 +15,7 @@ interface PtyModule {
   ): {
     pid: number;
     write(data: string): void;
+    resize(cols: number, rows: number): void;
     kill(signal?: string): void;
     onData(listener: (data: string) => void): { dispose(): void };
     onExit(listener: (event: { exitCode: number; signal?: number }) => void): {
@@ -28,7 +29,12 @@ export class PtyProcessBackend implements ProcessBackend {
   async start(
     command: string,
     args: string[],
-    options: { cwd: string; env: NodeJS.ProcessEnv },
+    options: {
+      cwd: string;
+      env: NodeJS.ProcessEnv;
+      cols?: number;
+      rows?: number;
+    },
   ): Promise<BackendProcess> {
     let pty: PtyModule;
     try {
@@ -48,8 +54,8 @@ export class PtyProcessBackend implements ProcessBackend {
     );
     const processHandle = pty.spawn(command, args, {
       name: env.TERM ?? "xterm-256color",
-      cols: 120,
-      rows: 30,
+      cols: options.cols ?? 120,
+      rows: options.rows ?? 30,
       cwd: options.cwd,
       env,
     });
@@ -64,6 +70,9 @@ class PtyBackendProcess implements BackendProcess {
   }
   write(data: string): void {
     this.processHandle.write(data);
+  }
+  resize(cols: number, rows: number): void {
+    this.processHandle.resize(cols, rows);
   }
   kill(signal: NodeJS.Signals = "SIGTERM"): void {
     if (process.platform === "win32") {
