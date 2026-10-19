@@ -229,6 +229,12 @@ self.addEventListener("fetch", (event) => {
 async function route(event) {
   const request = event.request;
   const url = new URL(request.url);
+  // Explicit HTTP selection and timed-out P2P downloads must stay on HTTP.
+  if (
+    url.pathname === "/api/workspace/file/download" &&
+    url.searchParams.get("__chatroom_http") === "1"
+  )
+    return fetch(request);
   if (!activeClients.has(event.clientId)) return fetch(request);
   const client = event.clientId && (await self.clients.get(event.clientId));
   if (!client) {

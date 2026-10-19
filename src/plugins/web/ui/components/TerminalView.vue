@@ -204,6 +204,7 @@ onMounted(async () => {
   flex: 1;
   min-width: 0;
   overflow-x: auto;
+  gap: 8px;
   scrollbar-width: thin;
 }
 .terminal-tab {
@@ -211,7 +212,7 @@ onMounted(async () => {
   flex: 0 0 auto;
   align-items: center;
   max-width: min(220px, 55vw);
-  border-right: 1px solid rgb(var(--v-theme-outline), 0.1);
+  border-radius: 6px 6px 0 0;
 }
 .terminal-tab--selected {
   background: rgb(var(--v-theme-primary), 0.07);

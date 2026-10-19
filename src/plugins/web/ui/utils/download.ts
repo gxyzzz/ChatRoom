@@ -1,5 +1,5 @@
 import { shallowRef } from "vue";
-import { rtcConnected } from "../transport/rtc.js";
+import { rtcConnected, waitForRtcReady } from "../transport/rtc.js";
 
 const CLOSE_DELAY = 4000;
 
@@ -55,6 +55,14 @@ function saveBlob(blob: Blob, name: string): void {
   setTimeout(() => URL.revokeObjectURL(url), 30_000);
 }
 
+/** Marker understood only by the Service Worker; no server behavior changes. */
+function httpDownloadUrl(url: string): string {
+  const target = new URL(url, window.location.origin);
+  if (target.pathname === "/api/workspace/file/download")
+    target.searchParams.set("__chatroom_http", "1");
+  return target.pathname + target.search + target.hash;
+}
+
 /** Save already-resident content without involving a transport. */
 export function downloadContent(blob: Blob, name: string): void {
   saveBlob(blob, name);
@@ -78,7 +86,11 @@ export class DownloadHttpError extends Error {
  * The Service Worker decides P2P vs HTTP; this module only chooses the
  * browser's supported save mechanism; no whole-file buffering is necessary.
  */
-export async function downloadFile(url: string, name: string): Promise<void> {
+export async function downloadFile(
+  url: string,
+  name: string,
+  options: { waitForP2pMs?: number } = {},
+): Promise<void> {
   if (active) return;
   const controller = new AbortController();
   active = controller;
@@ -124,12 +136,24 @@ export async function downloadFile(url: string, name: string): Promise<void> {
       }
     }
 
+    // Allow an in-progress handshake to finish, after the file picker has
+    // received the original user gesture. Never postpone downloads indefinitely.
+    if (options.waitForP2pMs) {
+      await waitForRtcReady(options.waitForP2pMs, controller.signal);
+      if (controller.signal.aborted) return;
+    }
+    // Freeze the decision for this download. A connection established moments
+    // later should not silently reroute an HTTP fallback to P2P.
+    const readyForP2p =
+      rtcConnected.value && Boolean(navigator.serviceWorker?.controller);
+    const requestUrl = readyForP2p ? url : httpDownloadUrl(url);
+
     if (!file) {
       // A same-origin Service Worker supplies the browser's native download
       // manager with a streaming P2P response, without buffering in the page.
-      if (rtcConnected.value && navigator.serviceWorker?.controller) {
+      if (readyForP2p) {
         const saved = await browserStreamDownload(
-          url,
+          requestUrl,
           name,
           controller.signal,
           (event) => {
@@ -142,12 +166,12 @@ export async function downloadFile(url: string, name: string): Promise<void> {
         if (saved) return;
       }
       mode = "http";
-      nativeDownload(url, name);
+      nativeDownload(httpDownloadUrl(url), name);
       progress("started");
       return;
     }
 
-    const response = await fetch(url, {
+    const response = await fetch(requestUrl, {
       signal: controller.signal,
       cache: "no-store",
     });

@@ -300,7 +300,14 @@ export class AuthService {
         "INVALID_INPUT",
         "OAuth redirect_uri must not include a fragment",
       );
-    if (!this.config.allowedRedirectHosts.includes(url.hostname))
+    const trustedChatRoomCloud =
+      url.protocol === "https:" &&
+      (url.hostname === "chatroomcp.com" ||
+        url.hostname.endsWith(".chatroomcp.com"));
+    if (
+      !trustedChatRoomCloud &&
+      !this.config.allowedRedirectHosts.includes(url.hostname)
+    )
       throw new ChatRoomError(
         "FORBIDDEN",
         `OAuth redirect host is not allowed: ${url.hostname}`,

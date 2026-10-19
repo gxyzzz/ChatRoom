@@ -27,6 +27,8 @@ import { createAgentPlugin } from "#plugins/agent/plugin";
 import { createWebPlugin, WebServiceToken } from "#plugins/web/plugin";
 import { createChatRoomMcpHandler } from "#mcp/server/create-mcp-server";
 import { McpToolControl } from "#mcp/server/tool-control";
+import { CustomMcpRepository } from "#infrastructure/database/custom-mcp-repository";
+import { CustomMcpManager } from "#mcp/custom/manager";
 import { HttpServer } from "#infrastructure/http/http-server";
 import type { LogService } from "#core/logging/types";
 
@@ -35,6 +37,7 @@ export interface ApplicationComponents {
   eventBus: RuntimeEventBus;
   operations: OperationLog;
   plugins: PluginManager;
+  customMcp: CustomMcpManager;
   processes: import("#plugins/process/process-supervisor").ProcessSupervisor;
   cloud: import("#plugins/cloud/controller").CloudController;
   computer: import("#plugins/computer/computer-service").ComputerService;
@@ -58,6 +61,12 @@ export async function createApplication(
     const mcpTools = new McpToolControl(
       new McpToolSettingsRepository(database),
     );
+    const customMcp = new CustomMcpManager(
+      new CustomMcpRepository(database),
+      mcpTools,
+      operations,
+      config.dataDir,
+    );
     const externalAccess = new ExternalAccessRegistry(config.auth);
     const auth = new AuthService(
       new OAuthRepository(database),
@@ -72,6 +81,7 @@ export async function createApplication(
         database,
         operations,
         mcpTools,
+        customMcp,
         events: eventBus,
         externalAccess,
         services,
@@ -88,11 +98,12 @@ export async function createApplication(
       ],
     );
     await plugins.start();
+    customMcp.start();
     const web = services.require(WebServiceToken);
     const processes = services.require(ProcessServiceToken);
     const cloud = services.require(CloudServiceToken);
     const computer = services.require(ComputerServiceToken);
-    const mcp = createChatRoomMcpHandler(plugins);
+    const mcp = createChatRoomMcpHandler(plugins, customMcp);
     const http = new HttpServer(
       config,
       web.application,
@@ -109,6 +120,7 @@ export async function createApplication(
       eventBus,
       operations,
       plugins,
+      customMcp,
       processes,
       cloud,
       computer,

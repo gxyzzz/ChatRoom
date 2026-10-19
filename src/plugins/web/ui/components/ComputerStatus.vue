@@ -46,7 +46,7 @@ function displaySubtitle(display: ComputerStatus["displays"][number]): string {
 
 <template>
   <template v-if="status">
-    <v-card rounded="xl" variant="flat" border class="panel-card">
+    <v-card rounded="lg" variant="flat" border class="panel-card">
       <div class="panel-header compact-header">
         <div class="panel-title">
           {{ locale.t("$vuetify.chatroom.computer.title") }}
@@ -180,7 +180,7 @@ function displaySubtitle(display: ComputerStatus["displays"][number]): string {
 
     <v-card
       v-if="status.displays.length"
-      rounded="xl"
+      rounded="lg"
       variant="flat"
       border
       class="panel-card"

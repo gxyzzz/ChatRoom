@@ -66,3 +66,44 @@ body {
   white-space: normal;
   overflow-wrap: anywhere;
 }
+
+/* Dialogs use the same content inset and corner treatment as page cards.
+   Keep component-specific form grids and long-content scrolling intact. */
+.v-dialog > .v-overlay__content > .v-card > .v-card-title {
+  padding: 20px 20px 8px;
+}
+
+.v-dialog > .v-overlay__content > .v-card > .v-card-item {
+  padding: 18px 20px 10px;
+}
+
+.v-dialog
+  > .v-overlay__content
+  > .v-card
+  > .v-card-text:not(.passkey-dialog-content) {
+  padding: 14px 20px 16px;
+}
+
+.v-dialog > .v-overlay__content > .v-card > .v-card-actions {
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 8px 12px 12px;
+}
+
+@media (max-width: 600px) {
+  .v-dialog > .v-overlay__content > .v-card > .v-card-title,
+  .v-dialog > .v-overlay__content > .v-card > .v-card-item {
+    padding-inline: 16px;
+  }
+
+  .v-dialog
+    > .v-overlay__content
+    > .v-card
+    > .v-card-text:not(.passkey-dialog-content) {
+    padding-inline: 16px;
+  }
+
+  .v-dialog > .v-overlay__content > .v-card > .v-card-actions {
+    padding-inline: 8px;
+  }
+}

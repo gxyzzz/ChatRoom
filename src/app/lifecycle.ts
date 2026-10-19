@@ -118,6 +118,11 @@ async function cleanupComponents(
     errors.push(error);
   }
   try {
+    await components.customMcp.close();
+  } catch (error) {
+    errors.push(error);
+  }
+  try {
     await components.plugins.stop();
   } catch (error) {
     errors.push(error);

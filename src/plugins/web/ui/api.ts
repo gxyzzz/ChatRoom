@@ -14,6 +14,7 @@ export type {
   RuntimeStatus,
   PasskeySummary,
   McpToolSummary,
+  CustomMcpServerSummary,
   CloudStatus,
   CloudService,
   CloudManagementSession,

@@ -1,4 +1,4 @@
-import { shallowRef } from "vue";
+import { shallowRef, watch } from "vue";
 import {
   INITIAL_CREDIT,
   Op,
@@ -44,6 +44,9 @@ function notifyTransportState(): void {
   });
 }
 export const rtcConnected = shallowRef(false);
+export const rtcStatus = shallowRef<"connecting" | "connected" | "unavailable">(
+  "unavailable",
+);
 export const rtcIceRoute = shallowRef<string | null>(null);
 
 export function startRtc(): void {
@@ -51,10 +54,13 @@ export function startRtc(): void {
     !("RTCPeerConnection" in window) ||
     !("serviceWorker" in navigator) ||
     (!window.isSecureContext && location.hostname !== "localhost")
-  )
+  ) {
+    rtcStatus.value = "unavailable";
     return;
+  }
   if (enabled) return;
   enabled = true;
+  rtcStatus.value = "connecting";
   suspended = false;
   navigator.serviceWorker.addEventListener("message", onRequest);
   window.addEventListener("pagehide", onPageHide);
@@ -73,6 +79,7 @@ export function startRtc(): void {
       if (enabled) void connect();
     })
     .catch(() => {
+      rtcStatus.value = "unavailable";
       /* Browser may forbid service workers; regular HTTP remains available. */
     });
 }
@@ -105,6 +112,7 @@ function onPageShow(): void {
 
 function close(): void {
   rtcConnected.value = false;
+  rtcStatus.value = "unavailable";
   notifyTransportState();
   rtcIceRoute.value = null;
   if (statsTimer !== null) clearInterval(statsTimer);
@@ -154,6 +162,7 @@ async function connect(): Promise<void> {
   if (!enabled || suspended || trying || channel?.readyState === "open") return;
   trying = (async () => {
     close();
+    rtcStatus.value = "connecting";
     const pc = new RTCPeerConnection({ iceServers: STUN });
     peer = pc;
     const dc = pc.createDataChannel("chatroom-v2", { ordered: true });
@@ -227,6 +236,7 @@ async function connect(): Promise<void> {
     });
     if (!enabled || peer !== pc) throw Error("RTC stopped");
     rtcConnected.value = true;
+    rtcStatus.value = "connected";
     notifyTransportState();
     void inspectIceRoute(pc);
     statsTimer = window.setInterval(() => {
@@ -242,6 +252,42 @@ async function connect(): Promise<void> {
       trying = null;
     });
   await trying;
+}
+
+/** Give an in-progress P2P handshake a bounded opportunity to finish. */
+export function waitForRtcReady(
+  timeoutMs: number,
+  signal: AbortSignal,
+): Promise<boolean> {
+  const ready = () =>
+    rtcConnected.value && Boolean(navigator.serviceWorker?.controller);
+  if (ready()) return Promise.resolve(true);
+  if (signal.aborted || rtcStatus.value !== "connecting" || timeoutMs <= 0)
+    return Promise.resolve(false);
+  return new Promise<boolean>((resolve) => {
+    let finished = false;
+    let timer: number | null = null;
+    let unwatch = () => {};
+    const complete = (connected: boolean) => {
+      if (finished) return;
+      finished = true;
+      if (timer !== null) window.clearTimeout(timer);
+      unwatch();
+      navigator.serviceWorker.removeEventListener("controllerchange", check);
+      signal.removeEventListener("abort", abort);
+      resolve(connected);
+    };
+    const check = () => {
+      if (ready()) complete(true);
+      else if (rtcStatus.value === "unavailable") complete(false);
+    };
+    const abort = () => complete(false);
+    unwatch = watch([rtcConnected, rtcStatus], check, { flush: "sync" });
+    timer = window.setTimeout(() => complete(ready()), timeoutMs);
+    navigator.serviceWorker.addEventListener("controllerchange", check);
+    signal.addEventListener("abort", abort, { once: true });
+    check();
+  });
 }
 
 function wireSend(frame: Uint8Array): void {

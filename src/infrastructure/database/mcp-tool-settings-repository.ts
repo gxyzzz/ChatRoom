@@ -12,6 +12,13 @@ export class McpToolSettingsRepository implements McpToolSettingStore {
     ).map((row) => row.tool_name);
   }
 
+  configuredTools(): string[] {
+    const rows = this.database.raw
+      .prepare("SELECT tool_name FROM mcp_tool_settings")
+      .all() as unknown as Array<{ tool_name: string }>;
+    return rows.map((row) => row.tool_name);
+  }
+
   setEnabled(name: string, enabled: boolean): void {
     this.database.raw
       .prepare(

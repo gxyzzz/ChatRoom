@@ -44,7 +44,7 @@ const capturedAt = computed(() => {
 </script>
 
 <template>
-  <v-card rounded="xl" variant="flat" border class="panel-card">
+  <v-card rounded="lg" variant="flat" border class="panel-card">
     <div class="panel-header compact-header">
       <div class="computer-preview-heading">
         <div class="panel-title">

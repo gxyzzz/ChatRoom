@@ -2,6 +2,7 @@
 import { computed, onMounted, reactive, shallowRef } from "vue";
 import { useLocale } from "vuetify";
 import { api, type McpToolSummary } from "../api.js";
+import CustomMcpView from "./CustomMcpView.vue";
 import { errorMessage } from "../utils/errors.js";
 import { createRequestGate } from "../utils/requests.js";
 
@@ -11,6 +12,7 @@ interface ToolGroup {
 }
 
 const locale = useLocale();
+const activeTab = shallowRef("builtIn");
 const tools = shallowRef<McpToolSummary[]>([]);
 const loading = shallowRef(false);
 const error = shallowRef("");
@@ -20,6 +22,7 @@ const loadRequests = createRequestGate();
 const groups = computed<ToolGroup[]>(() => {
   const grouped = new Map<string, McpToolSummary[]>();
   for (const tool of tools.value) {
+    if (tool.pluginId === "custom-mcp") continue;
     const items = grouped.get(tool.pluginId) ?? [];
     items.push(tool);
     grouped.set(tool.pluginId, items);
@@ -134,94 +137,117 @@ function allEnabled(group: ToolGroup): boolean {
 </script>
 
 <template>
-  <div class="mcp-tools-view">
-    <v-alert v-if="error" type="error" variant="tonal" density="compact">
-      {{ error }}
-    </v-alert>
+  <div class="mcp-tools-shell">
+    <v-tabs v-model="activeTab" color="primary" density="compact">
+      <v-tab value="builtIn">{{
+        locale.t("$vuetify.chatroom.customMcp.builtIn")
+      }}</v-tab>
+      <v-tab value="custom">{{
+        locale.t("$vuetify.chatroom.customMcp.custom")
+      }}</v-tab>
+    </v-tabs>
+    <CustomMcpView v-if="activeTab === 'custom'" />
+    <div v-else class="mcp-tools-view">
+      <v-alert v-if="error" type="error" variant="tonal" density="compact">
+        {{ error }}
+      </v-alert>
 
-    <v-card class="panel-card">
-      <div class="panel-header">
-        <div>
-          <div class="panel-title">
-            {{ locale.t("$vuetify.chatroom.mcpTools.title") }}
-          </div>
-        </div>
-        <v-btn
-          class="mcp-tools-refresh"
-          icon="$mdiRefresh"
-          size="small"
-          variant="text"
-          :loading="loading"
-          :disabled="busy.size > 0"
-          :aria-label="locale.t('$vuetify.chatroom.mcpTools.refresh')"
-          @click="load"
-        />
-      </div>
-    </v-card>
-
-    <v-progress-linear v-if="loading && !tools.length" indeterminate rounded />
-
-    <v-card
-      v-for="group in groups"
-      :key="group.pluginId"
-      class="panel-card mcp-tool-group"
-    >
-      <div class="mcp-tool-group-header">
-        <div class="min-w-0">
-          <div class="panel-title">{{ pluginLabel(group.pluginId) }}</div>
-        </div>
-        <v-switch
-          class="mcp-tool-switch"
-          :model-value="allEnabled(group)"
-          :indeterminate="someEnabled(group) && !allEnabled(group)"
-          color="primary"
-          density="compact"
-          hide-details
-          inset
-          :disabled="group.tools.some((tool) => busy.has(tool.name))"
-          :aria-label="
-            locale.t(
-              '$vuetify.chatroom.mcpTools.togglePlugin',
-              pluginLabel(group.pluginId),
-            )
-          "
-          @update:model-value="setGroupEnabled(group, Boolean($event))"
-        />
-      </div>
-      <v-divider />
-
-      <div class="mcp-tool-list">
-        <div v-for="tool in group.tools" :key="tool.name" class="mcp-tool-row">
-          <div class="mcp-tool-copy" :title="toolDescription(tool)">
-            <div class="mcp-tool-heading">
-              <strong>{{ toolTitle(tool) }}</strong>
-              <code>{{ tool.name }}</code>
+      <v-card class="panel-card">
+        <div class="panel-header">
+          <div>
+            <div class="panel-title">
+              {{ locale.t("$vuetify.chatroom.mcpTools.title") }}
             </div>
+          </div>
+          <v-btn
+            class="mcp-tools-refresh"
+            icon="$mdiRefresh"
+            size="small"
+            variant="text"
+            :loading="loading"
+            :disabled="busy.size > 0"
+            :aria-label="locale.t('$vuetify.chatroom.mcpTools.refresh')"
+            @click="load"
+          />
+        </div>
+      </v-card>
+
+      <v-progress-linear
+        v-if="loading && !tools.length"
+        indeterminate
+        rounded
+      />
+
+      <v-card
+        v-for="group in groups"
+        :key="group.pluginId"
+        class="panel-card mcp-tool-group"
+      >
+        <div class="mcp-tool-group-header">
+          <div class="min-w-0">
+            <div class="panel-title">{{ pluginLabel(group.pluginId) }}</div>
           </div>
           <v-switch
             class="mcp-tool-switch"
-            :model-value="tool.enabled"
+            :model-value="allEnabled(group)"
+            :indeterminate="someEnabled(group) && !allEnabled(group)"
             color="primary"
             density="compact"
             hide-details
             inset
-            :loading="busy.has(tool.name)"
-            :aria-label="toolTitle(tool)"
-            @update:model-value="setEnabled(tool, Boolean($event))"
+            :disabled="group.tools.some((tool) => busy.has(tool.name))"
+            :aria-label="
+              locale.t(
+                '$vuetify.chatroom.mcpTools.togglePlugin',
+                pluginLabel(group.pluginId),
+              )
+            "
+            @update:model-value="setGroupEnabled(group, Boolean($event))"
           />
         </div>
-      </div>
-    </v-card>
+        <v-divider />
 
-    <v-card v-if="!loading && !tools.length" class="panel-card">
-      <div class="empty-inline">
-        {{ locale.t("$vuetify.chatroom.mcpTools.empty") }}
-      </div>
-    </v-card>
+        <div class="mcp-tool-list">
+          <div
+            v-for="tool in group.tools"
+            :key="tool.name"
+            class="mcp-tool-row"
+          >
+            <div class="mcp-tool-copy" :title="toolDescription(tool)">
+              <div class="mcp-tool-heading">
+                <strong>{{ toolTitle(tool) }}</strong>
+                <code>{{ tool.name }}</code>
+              </div>
+            </div>
+            <v-switch
+              class="mcp-tool-switch"
+              :model-value="tool.enabled"
+              color="primary"
+              density="compact"
+              hide-details
+              inset
+              :loading="busy.has(tool.name)"
+              :aria-label="toolTitle(tool)"
+              @update:model-value="setEnabled(tool, Boolean($event))"
+            />
+          </div>
+        </div>
+      </v-card>
+
+      <v-card v-if="!loading && !tools.length" class="panel-card">
+        <div class="empty-inline">
+          {{ locale.t("$vuetify.chatroom.mcpTools.empty") }}
+        </div>
+      </v-card>
+    </div>
   </div>
 </template>
 
 <style scoped>
+.mcp-tools-shell {
+  display: grid;
+  gap: 14px;
+}
 .mcp-tools-view {
   display: grid;
   gap: 14px;
@@ -305,6 +331,10 @@ function allEnabled(group: ToolGroup): boolean {
 }
 
 @media (max-width: 640px) {
+  .mcp-tools-shell {
+    display: grid;
+    gap: 14px;
+  }
   .mcp-tools-view {
     gap: 12px;
   }

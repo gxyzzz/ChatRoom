@@ -21,6 +21,10 @@ import {
   createPrivateAuthApiRouter,
   createPublicAuthApiRouter,
 } from "./auth-api-router.js";
+import {
+  createCustomMcpApiRouter,
+  createCustomMcpOAuthCallbackRouter,
+} from "./custom-mcp-api-router.js";
 import { createRuntimeApiRouter } from "./runtime-api-router.js";
 import { createLogsApiRouter } from "./logs-api-router.js";
 import { createAgentApiRouter } from "./agent-api-router.js";
@@ -45,10 +49,12 @@ export function createApiRouter(
 ): Router {
   const router = Router();
   router.use(createPublicAuthApiRouter(auth, passkeys, ingress, logs));
+  router.use(createCustomMcpOAuthCallbackRouter(application.customMcp));
   router.use(apiAuthentication(auth, ingress));
   router.use(createPrivateAuthApiRouter(passkeys, ingress, logs));
   router.use(createRtcApiRouter(config));
   router.use(createRuntimeApiRouter(application, eventBus, runtimeStatus));
+  router.use(createCustomMcpApiRouter(application.customMcp, ingress));
   router.use(createLogsApiRouter(logs));
 
   router.get("/operations", (req, res) => {

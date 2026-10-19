@@ -3,6 +3,7 @@ import { ChatRoomError } from "#core/errors/chatroom-error";
 
 export interface McpToolSettingStore {
   disabledTools(): string[];
+  configuredTools?(): string[];
   setEnabled(name: string, enabled: boolean): void;
 }
 
@@ -19,15 +20,19 @@ interface McpToolDefinition {
   pluginId: string;
   title: string;
   description: string;
+  defaultEnabled?: boolean;
 }
 
 export class McpToolControl {
   private readonly disabled = new Set<string>();
+  private readonly configured = new Set<string>();
   private readonly definitions = new Map<string, McpToolDefinition>();
   private readonly handles = new Map<string, Set<WeakRef<RegisteredTool>>>();
 
   constructor(private readonly store: McpToolSettingStore) {
     for (const name of store.disabledTools()) this.disabled.add(name);
+    for (const name of store.configuredTools?.() ?? [])
+      this.configured.add(name);
   }
 
   define(definition: McpToolDefinition): void {
@@ -37,6 +42,23 @@ export class McpToolControl {
         `MCP tool already belongs to another plugin: ${definition.name}`,
       );
     this.definitions.set(definition.name, definition);
+    if (
+      definition.defaultEnabled === false &&
+      !this.configured.has(definition.name)
+    )
+      this.setEnabled(definition.name, false);
+  }
+
+  undefine(name: string): void {
+    this.definitions.delete(name);
+    for (const reference of this.handles.get(name) ?? []) {
+      reference.deref()?.remove();
+    }
+    this.handles.delete(name);
+  }
+
+  isEnabled(name: string): boolean {
+    return this.definitions.has(name) && !this.disabled.has(name);
   }
 
   attach(name: string, tool: RegisteredTool): void {
@@ -73,6 +95,7 @@ export class McpToolControl {
     if (enabled === !this.disabled.has(name)) return { ...definition, enabled };
 
     this.store.setEnabled(name, enabled);
+    this.configured.add(name);
     if (enabled) this.disabled.delete(name);
     else this.disabled.add(name);
     this.updateHandles(name, enabled);

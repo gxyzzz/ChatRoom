@@ -52,14 +52,23 @@ export const vuetify = createVuetify({
   },
   defaults: {
     VDialog: { maxWidth: "36rem" },
-    VCard: { elevation: 0, border: true, rounded: "xl" },
+    VCard: { elevation: 0, border: true, rounded: "lg" },
     VBtn: { rounded: "lg", elevation: 0 },
     VTextField: {
       variant: "outlined",
       density: "comfortable",
       hideDetails: "auto",
     },
-    VSelect: { variant: "outlined", density: "compact", hideDetails: "auto" },
+    VSelect: {
+      variant: "outlined",
+      density: "comfortable",
+      hideDetails: "auto",
+    },
+    VTextarea: {
+      variant: "outlined",
+      density: "comfortable",
+      hideDetails: "auto",
+    },
     VSwitch: {
       color: "primary",
       density: "compact",

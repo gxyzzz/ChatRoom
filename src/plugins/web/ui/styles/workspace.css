@@ -243,6 +243,7 @@
 .git-commit-hash {
   display: inline-block;
   min-inline-size: 7ch;
+  margin-inline-end: 14px;
   color: rgb(var(--v-theme-on-surface), 0.5);
   font-size: 10px;
 }

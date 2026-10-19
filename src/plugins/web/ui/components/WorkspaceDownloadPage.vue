@@ -3,7 +3,12 @@ import { computed, defineAsyncComponent, shallowRef } from "vue";
 import { useLocale } from "vuetify";
 import { workspaceDownloadUrl } from "../utils/workspace-download.js";
 import { filePreviewKind } from "../composables/useWorkspaceFiles.js";
-import { downloadFile, DownloadHttpError } from "../utils/download.js";
+import {
+  downloadFile,
+  downloadProgress,
+  DownloadHttpError,
+} from "../utils/download.js";
+import { rtcIceRoute, rtcStatus } from "../transport/rtc.js";
 
 const WorkspaceDownloadPreview = defineAsyncComponent(
   () => import("./WorkspaceDownloadPreview.vue"),
@@ -20,6 +25,31 @@ const previewOpen = shallowRef(false);
 const canPreview = Boolean(path && filePreviewKind(path) !== "unsupported");
 const started = shallowRef(false);
 const error = shallowRef("");
+const transferMode = computed(() => {
+  const progress = downloadProgress.value;
+  if (!progress || progress.name !== (fileName || "download")) return null;
+  if (progress.phase === "transferring" && progress.received === 0) return null;
+  return progress.mode;
+});
+const connectionState = computed(() =>
+  transferMode.value === "p2p"
+    ? "transferP2p"
+    : transferMode.value === "http"
+      ? "transferHttp"
+      : rtcStatus.value === "connected"
+        ? "p2pReady"
+        : rtcStatus.value === "connecting"
+          ? "p2pConnecting"
+          : "httpAvailable",
+);
+const connectionIcon = computed(() =>
+  connectionState.value === "p2pReady" ||
+  connectionState.value === "transferP2p"
+    ? "$mdiCheckCircleOutline"
+    : connectionState.value === "p2pConnecting"
+      ? "$mdiProgressClock"
+      : "$mdiCloudOutline",
+);
 const pageTitle = computed(() => {
   const key = !url
     ? "invalidDownload"
@@ -53,7 +83,7 @@ async function download() {
   busy.value = true;
   error.value = "";
   try {
-    await downloadFile(url, fileName || "download");
+    await downloadFile(url, fileName || "download", { waitForP2pMs: 4000 });
     started.value = true;
   } catch (cause) {
     if (cause instanceof DownloadHttpError && cause.status === 401) {
@@ -79,6 +109,15 @@ async function download() {
       <div v-if="url" class="text-body-2 text-medium-emphasis text-break">
         {{ fileName }}
       </div>
+      <div
+        v-if="url"
+        class="d-flex align-center justify-center ga-2 mt-3 text-body-2"
+        :title="rtcIceRoute ?? undefined"
+        role="status"
+      >
+        <v-icon :icon="connectionIcon" size="18" />
+        {{ locale.t("$vuetify.chatroom.files." + connectionState) }}
+      </div>
       <template #actions>
         <v-btn href="/" color="secondary" variant="text">
           {{ locale.t("$vuetify.chatroom.files.backToWorkspace") }}
@@ -96,7 +135,7 @@ async function download() {
           color="primary"
           variant="flat"
           :loading="busy"
-          @click="download"
+          @click="download()"
         >
           {{ locale.t("$vuetify.chatroom.files.download") }}
         </v-btn>

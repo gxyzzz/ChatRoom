@@ -22,6 +22,7 @@ import type {
   AgentTurn,
   AgentTurnSource,
 } from "#plugins/agent/types";
+import type { CustomMcpServerSummary } from "#mcp/custom/types";
 import type { McpToolSummary as DomainMcpToolSummary } from "#mcp/server/tool-control";
 import type {
   CloudServiceId,
@@ -108,6 +109,7 @@ export interface UpdateStatus {
 }
 
 export type McpToolSummary = DomainMcpToolSummary;
+export type { CustomMcpServerSummary };
 export type CloudService = CloudServiceId;
 export type CloudStatus = DomainCloudStatus;
 
