@@ -26,6 +26,47 @@ let writing = false;
 let disposed = false;
 let lastSize = "";
 
+// xterm's default ANSI palette is intended for dark terminals. Explicit
+// palettes keep PowerShell syntax colors legible in both application themes.
+const ansiColors = {
+  light: {
+    black: "#24292f",
+    red: "#b42332",
+    green: "#116b38",
+    yellow: "#79510f",
+    blue: "#2858ad",
+    magenta: "#8937a4",
+    cyan: "#006b78",
+    white: "#4b5563",
+    brightBlack: "#596573",
+    brightRed: "#a91925",
+    brightGreen: "#0b6c3a",
+    brightYellow: "#76520c",
+    brightBlue: "#1f56aa",
+    brightMagenta: "#842ca2",
+    brightCyan: "#006d7b",
+    brightWhite: "#24292f",
+  },
+  dark: {
+    black: "#767d87",
+    red: "#ff8b8b",
+    green: "#71d49d",
+    yellow: "#edc16a",
+    blue: "#98b7ff",
+    magenta: "#d59bf4",
+    cyan: "#80d2e2",
+    white: "#dfe4eb",
+    brightBlack: "#979faa",
+    brightRed: "#ffa7a7",
+    brightGreen: "#93e2b3",
+    brightYellow: "#ffda90",
+    brightBlue: "#bfd0ff",
+    brightMagenta: "#e6baff",
+    brightCyan: "#9be5f4",
+    brightWhite: "#f7f9fc",
+  },
+};
+
 function readColor(name: string): string {
   const rgb = getComputedStyle(host.value!).getPropertyValue(name).trim();
   return rgb ? `rgb(${rgb})` : "";
@@ -35,6 +76,7 @@ function applyTheme(): void {
   if (!host.value || !terminal) return;
   const style = getComputedStyle(host.value);
   terminal.options.theme = {
+    ...ansiColors[theme.global.current.value.dark ? "dark" : "light"],
     background: style.backgroundColor,
     foreground: style.color,
     cursor: readColor("--v-theme-primary") || style.color,
@@ -129,6 +171,7 @@ onMounted(() => {
     fontFamily: "monospace",
     fontSize: Math.round(parseFloat(getComputedStyle(element).fontSize)) || 14,
     allowTransparency: false,
+    minimumContrastRatio: 4.5,
   });
   const addon = new FitAddon();
   terminal = t;
