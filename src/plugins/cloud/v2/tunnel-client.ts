@@ -49,6 +49,7 @@ export class V2TunnelClient {
   private readyTimer: NodeJS.Timeout | null = null;
   private heartbeatTimer: NodeJS.Timeout | null = null;
   private awaitingPong = false;
+  private failureReported = false;
   private stopped = true;
   private attempts = 0;
   private closeWhenIdle: "stop" | "reconnect" | null = null;
@@ -119,6 +120,7 @@ export class V2TunnelClient {
 
   private connect(): void {
     if (this.stopped || this.socket) return;
+    this.failureReported = false;
     const socket = new WebSocket(this.lease.tunnelUrl, V2_PROTOCOL);
     this.socket = socket;
     let ready = false;
@@ -135,9 +137,7 @@ export class V2TunnelClient {
             )
           : new Error("Tunnel V2 handshake rejected: " + response.statusCode);
       response.resume();
-      this.callbacks.onError(error);
-      this.stop();
-      socket.terminate();
+      this.fail(socket, error);
     });
     socket.on("open", () => {
       if (socket.protocol !== V2_PROTOCOL)
@@ -185,10 +185,9 @@ export class V2TunnelClient {
       if (this.socket === socket) this.awaitingPong = false;
     });
     socket.on("close", (code) => {
-      if (this.socket === socket) {
-        this.clearTimers();
-        this.socket = null;
-      }
+      if (this.socket !== socket) return;
+      this.clearTimers();
+      this.socket = null;
       this.closeWhenIdle = null;
       this.destroyStreams();
       this.callbacks.onDisconnected();
@@ -412,10 +411,10 @@ export class V2TunnelClient {
     this.heartbeatTimer.unref();
   }
   private fail(socket: WebSocket, error: Error): void {
-    if (this.socket !== socket) return;
+    if (this.socket !== socket || this.failureReported) return;
+    this.failureReported = true;
     this.callbacks.onError(error);
     this.clearTimers();
-    this.socket = null;
     socket.terminate();
   }
   private scheduleReconnect(): void {
