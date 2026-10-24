@@ -22,7 +22,13 @@ watch(
     document.value = null;
     loading.value = true;
     error.value = "";
-    const task = getDocument({ url, withCredentials: true });
+    const task = getDocument({
+      url,
+      withCredentials: true,
+      cMapUrl: `${import.meta.env.BASE_URL}assets/pdfjs/cmaps/`,
+      cMapPacked: true,
+      standardFontDataUrl: `${import.meta.env.BASE_URL}assets/pdfjs/standard_fonts/`,
+    });
     let disposed = false;
     onCleanup(() => {
       disposed = true;
