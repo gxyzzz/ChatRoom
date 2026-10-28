@@ -283,6 +283,8 @@ export const zhChatRoom: typeof enChatRoom = {
     tokenUsage: "Token 总计：{0}",
     contextUsage: "上下文：{0}/{1}（{2}%）",
     unsupportedAttachment: "此模型不支持所选媒体：{0}",
+    emptyAttachment: "文件为空：{0}",
+    incompleteAttachment: "上传文件大小不一致：{0}",
     webSearch: "网页搜索",
     imageGeneration: "图片生成",
     summaries: { auto: "自动", concise: "简洁", detailed: "详细", none: "无" },

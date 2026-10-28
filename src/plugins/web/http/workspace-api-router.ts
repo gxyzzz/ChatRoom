@@ -155,6 +155,16 @@ export function createWorkspaceApiRouter(application: WebRuntime): Router {
           "INVALID_INPUT",
           "Attachment body must be binary",
         );
+      if (req.body.byteLength === 0)
+        throw new ChatRoomError("INVALID_INPUT", "Attachment is empty");
+      const expectedSize = req.headers["x-chatroom-upload-size"];
+      if (
+        expectedSize !== undefined &&
+        (typeof expectedSize !== "string" ||
+          !/^\d+$/.test(expectedSize) ||
+          Number(expectedSize) !== req.body.byteLength)
+      )
+        throw new ChatRoomError("INVALID_INPUT", "Attachment size mismatch");
       const fs = await application.workspaces.fs(root);
       const session = application.agents.getSession(sessionId);
       if (session.workspaceRoot !== fs.root)
