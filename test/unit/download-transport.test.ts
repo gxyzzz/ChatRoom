@@ -121,3 +121,138 @@ test("explicit HTTP file downloads bypass an active P2P Service Worker", async (
   assert.equal(await reply.text(), "http-file");
   assert.equal(httpRequests, 1);
 });
+
+test("Agent attachment upload forwards the exact bytes over P2P", async () => {
+  const events = new Map<string, (event: any) => void>();
+  const origin = "https://chatroom.example";
+  const result: {
+    forwarded?: { body: ArrayBuffer; headers: Record<string, string> };
+    response?: Promise<Response>;
+  } = {};
+  let fallbackCount = 0;
+  const client = {
+    id: "client1",
+    postMessage(info: any, transfer: [MessagePort, ArrayBuffer]) {
+      result.forwarded = info;
+      transfer[0].postMessage({ type: "declined" });
+    },
+  };
+  const worker = {
+    location: { origin },
+    addEventListener(name: string, cb: (event: any) => void) {
+      events.set(name, cb);
+    },
+    clients: { claim: async () => {}, get: async () => client },
+    skipWaiting() {},
+  };
+  const code = readFileSync(
+    path.join(process.cwd(), "src/plugins/web/ui/public/transport-sw.js"),
+    "utf8",
+  );
+  vm.runInNewContext(code, {
+    self: worker,
+    URL,
+    Headers,
+    Request,
+    Response,
+    MessageChannel,
+    setTimeout,
+    clearTimeout,
+    fetch: async () => {
+      fallbackCount++;
+      return new Response("http-fallback");
+    },
+  });
+  events.get("message")?.({
+    data: { type: "chatroom-v2-state", active: true },
+    source: { id: "client1" },
+  });
+  const bytes = new Uint8Array([0xff, 0xd8, 0x00, 0x80, 0xff, 0xd9]);
+  events.get("fetch")?.({
+    request: new Request(origin + "/api/workspace/attachment?name=photo.jpg", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/octet-stream",
+        "X-ChatRoom-Upload-Size": String(bytes.byteLength),
+      },
+      body: bytes,
+    }),
+    clientId: "client1",
+    respondWith(value: Promise<Response>) {
+      result.response = value;
+    },
+  });
+  assert.ok(result.response);
+  assert.equal(await (await result.response).text(), "http-fallback");
+  assert.ok(result.forwarded);
+  assert.deepEqual(new Uint8Array(result.forwarded.body), bytes);
+  assert.equal(
+    result.forwarded.headers["x-chatroom-upload-size"],
+    String(bytes.byteLength),
+  );
+  assert.equal(fallbackCount, 1);
+});
+
+test("P2P worker refuses to forward truncated attachment bodies", async () => {
+  const events = new Map<string, (event: any) => void>();
+  const origin = "https://chatroom.example";
+  let forwarded = false;
+  let fallbackCount = 0;
+  const worker = {
+    location: { origin },
+    addEventListener(name: string, cb: (event: any) => void) {
+      events.set(name, cb);
+    },
+    clients: {
+      claim: async () => {},
+      get: async () => ({
+        id: "client1",
+        postMessage() {
+          forwarded = true;
+        },
+      }),
+    },
+    skipWaiting() {},
+  };
+  const code = readFileSync(
+    path.join(process.cwd(), "src/plugins/web/ui/public/transport-sw.js"),
+    "utf8",
+  );
+  vm.runInNewContext(code, {
+    self: worker,
+    URL,
+    Headers,
+    Request,
+    Response,
+    MessageChannel,
+    setTimeout,
+    clearTimeout,
+    fetch: async () => {
+      fallbackCount++;
+      return new Response("http-fallback");
+    },
+  });
+  events.get("message")?.({
+    data: { type: "chatroom-v2-state", active: true },
+    source: { id: "client1" },
+  });
+  const result: { response?: Promise<Response> } = {};
+  events.get("fetch")?.({
+    request: new Request(origin + "/api/workspace/attachment", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/octet-stream",
+        "X-ChatRoom-Upload-Size": "256",
+      },
+      body: new Uint8Array([0xff, 0xd8, 0xff, 0xd9]),
+    }),
+    clientId: "client1",
+    respondWith(value: Promise<Response>) {
+      result.response = value;
+    },
+  });
+  assert.ok(result.response);
+  assert.equal(await (await result.response).text(), "http-fallback");
+  assert.equal(forwarded, false);
+  assert.equal(fallbackCount, 1);
+});

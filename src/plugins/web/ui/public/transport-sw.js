@@ -242,15 +242,29 @@ async function route(event) {
     return fetch(request);
   }
 
-  const length = Number(request.headers.get("content-length"));
-  if (Number.isFinite(length) && length > MAX_INLINE_UPLOAD)
+  const expectedSize = request.headers.get("x-chatroom-upload-size");
+  const declaredSize = expectedSize === null ? null : Number(expectedSize);
+  if (
+    declaredSize !== null &&
+    (!Number.isSafeInteger(declaredSize) || declaredSize <= 0)
+  )
+    return new Response("Invalid upload size", { status: 400 });
+  if (declaredSize !== null && declaredSize > MAX_INLINE_UPLOAD)
+    return fetch(request);
+  const length = request.headers.get("content-length");
+  if (length !== null && Number(length) > MAX_INLINE_UPLOAD)
     return fetch(request);
   let body = new ArrayBuffer(0);
   if (request.method !== "GET") {
     try {
       const clone = request.clone();
-      if (request.body && clone.body) {
-        // Preserve bounded streaming for upload requests that expose a body.
+      if (url.pathname === "/api/workspace/attachment" || !clone.body) {
+        // Binary uploads must use the Request payload, not a browser-specific
+        // File stream. Firefox can also expose null FetchEvent.request.body.
+        body = await clone.arrayBuffer();
+        if (body.byteLength > MAX_INLINE_UPLOAD) return fetch(request);
+      } else {
+        // Keep all other requests bounded when Content-Length is unavailable.
         const reader = clone.body.getReader();
         const chunks = [];
         let size = 0;
@@ -271,12 +285,9 @@ async function route(event) {
           offset += chunk.byteLength;
         }
         body = buffer.buffer;
-      } else {
-        // Firefox can expose a null FetchEvent.request.body even when POST
-        // data is present. Request.arrayBuffer() still returns that payload.
-        body = await clone.arrayBuffer();
-        if (body.byteLength > MAX_INLINE_UPLOAD) return fetch(request);
       }
+      if (declaredSize !== null && body.byteLength !== declaredSize)
+        return fetch(request);
     } catch {
       return fetch(request);
     }
@@ -307,6 +318,7 @@ async function route(event) {
     "if-none-match",
     "if-modified-since",
     "x-chatroom-mime-type",
+    "x-chatroom-upload-size",
   ]) {
     const value = request.headers.get(name);
     if (value) headers[name] = value;

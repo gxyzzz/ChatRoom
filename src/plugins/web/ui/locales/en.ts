@@ -307,6 +307,8 @@ export const enChatRoom = {
     contextUsage: "Context {0} / {1} ({2}%)",
     unsupportedAttachment:
       "This model does not support the selected media: {0}",
+    emptyAttachment: "File is empty: {0}",
+    incompleteAttachment: "Upload size mismatch: {0}",
     webSearch: "Web search",
     imageGeneration: "Image generation",
     summaries: {
