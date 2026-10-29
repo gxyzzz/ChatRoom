@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { useLocale } from "vuetify";
 
-defineProps<{ busy?: boolean }>();
+const props = withDefaults(defineProps<{ busy?: boolean; count?: number }>(), {
+  count: 1,
+});
 defineEmits<{ confirm: [] }>();
 const open = defineModel<boolean>({ required: true });
 const locale = useLocale();
@@ -12,11 +14,24 @@ const locale = useLocale();
     <v-card>
       <v-card-item prepend-icon="$mdiAlertCircleOutline" class="text-error">
         <v-card-title>
-          {{ locale.t("$vuetify.chatroom.agents.deleteTitle") }}
+          {{
+            locale.t(
+              props.count > 1
+                ? "$vuetify.chatroom.agents.bulkDeleteTitle"
+                : "$vuetify.chatroom.agents.deleteTitle",
+            )
+          }}
         </v-card-title>
       </v-card-item>
       <v-card-text>
-        {{ locale.t("$vuetify.chatroom.agents.deleteDescription") }}
+        {{
+          locale.t(
+            props.count > 1
+              ? "$vuetify.chatroom.agents.bulkDeleteDescription"
+              : "$vuetify.chatroom.agents.deleteDescription",
+            props.count,
+          )
+        }}
       </v-card-text>
       <v-card-actions>
         <v-spacer />
@@ -29,7 +44,13 @@ const locale = useLocale();
           :loading="busy"
           @click="$emit('confirm')"
         >
-          {{ locale.t("$vuetify.chatroom.agents.delete") }}
+          {{
+            locale.t(
+              props.count > 1
+                ? "$vuetify.chatroom.agents.deleteSelected"
+                : "$vuetify.chatroom.agents.delete",
+            )
+          }}
         </v-btn>
       </v-card-actions>
     </v-card>

@@ -129,6 +129,7 @@ export class CustomMcpManager {
     private readonly control: McpToolControl,
     private readonly operations: OperationLog,
     dataDir?: string,
+    private readonly operationSource: "mcp" | "agent_mcp" = "mcp",
   ) {
     this.oauth = dataDir ? new CustomMcpOAuthStore(dataDir) : null;
     for (const config of repository.list())
@@ -139,6 +140,7 @@ export class CustomMcpManager {
       if (entry.config.enabled) void this.connect(entry);
   }
   list(): CustomMcpServerSummary[] {
+    this.syncRepository();
     return [...this.entries.values()].map((entry) => ({
       id: entry.config.id,
       name: entry.config.name,
@@ -367,6 +369,7 @@ export class CustomMcpManager {
   }
 
   registerMcp(server: McpServer): void {
+    this.syncRepository();
     for (const entry of this.entries.values()) {
       if (!entry.config.enabled || entry.status !== "connected") continue;
       for (const tool of entry.tools) {
@@ -412,7 +415,7 @@ export class CustomMcpManager {
     const client = entry.client;
     const operation = this.operations.start({
       pluginId: "custom-mcp",
-      source: "mcp",
+      source: this.operationSource,
       action: entry.config.name + "/" + name,
       input: { serverId: id, toolName: name },
     });
@@ -586,6 +589,34 @@ export class CustomMcpManager {
   private async dispose(entry: Entry): Promise<void> {
     entry.config.enabled = false;
     await this.disconnect(entry);
+  }
+
+  private syncRepository(): void {
+    if (this.closed) return;
+    const configs = this.repository.list();
+    const ids = new Set(configs.map((config) => config.id));
+    for (const [id, previous] of this.entries) {
+      if (ids.has(id)) continue;
+      this.entries.delete(id);
+      this.repository.delete(id);
+      void this.dispose(previous);
+    }
+    for (const config of configs) {
+      const existing = this.entries.get(config.id);
+      if (!existing) {
+        const entry = newEntry(config);
+        this.entries.set(config.id, entry);
+        if (config.enabled) void this.connect(entry);
+        continue;
+      }
+      if (JSON.stringify(existing.config) === JSON.stringify(config)) continue;
+      const replacement = newEntry(config);
+      this.entries.set(config.id, replacement);
+      void this.dispose(existing).then(() => {
+        if (config.enabled && this.entries.get(config.id) === replacement)
+          return this.connect(replacement);
+      });
+    }
   }
 
   private require(id: string): Entry {

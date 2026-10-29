@@ -33,6 +33,35 @@ export function createRuntimeApiRouter(
     );
   });
 
+  router.get("/agent-mcp/tools", (_req, res) => {
+    res.json(application.agentMcpTools.list());
+  });
+  router.patch("/agent-mcp/tools/:toolName", async (req, res) => {
+    const body = bodyRecord(req.body);
+    if (typeof body.enabled !== "boolean")
+      throw new ChatRoomError("INVALID_INPUT", "enabled must be a boolean");
+    const updated = application.agentMcpTools.setEnabled(
+      requireString(req.params.toolName, "toolName"),
+      body.enabled,
+    );
+    await application.agents.refreshMcpServers();
+    res.json(updated);
+  });
+  router.get("/agent-mcp/servers", (_req, res) => {
+    res.json(application.agentCustomMcp.list());
+  });
+  router.patch("/agent-mcp/servers/:id", async (req, res) => {
+    const body = bodyRecord(req.body);
+    if (typeof body.enabled !== "boolean")
+      throw new ChatRoomError("INVALID_INPUT", "enabled must be a boolean");
+    const updated = await application.agentCustomMcp.update(
+      requireString(req.params.id, "id"),
+      { enabled: body.enabled },
+    );
+    await application.agents.refreshMcpServers();
+    res.json(updated);
+  });
+
   router.get("/events", (_req, res) => {
     res.status(200);
     res.setHeader("Content-Type", "text/event-stream");

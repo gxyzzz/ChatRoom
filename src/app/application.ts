@@ -2,6 +2,7 @@ import type { ChatRoomConfig } from "#config/types";
 import { AppDatabase } from "#infrastructure/database/app-database";
 import { OperationRepository } from "#infrastructure/database/operation-repository";
 import { McpToolSettingsRepository } from "#infrastructure/database/mcp-tool-settings-repository";
+import { AgentMcpSettingsRepository } from "#infrastructure/database/agent-mcp-settings-repository";
 import { OAuthRepository } from "#infrastructure/database/oauth-repository";
 import { PasskeyRepository } from "#infrastructure/database/passkey-repository";
 import { WebSessionRepository } from "#infrastructure/database/web-session-repository";
@@ -29,6 +30,11 @@ import { createChatRoomMcpHandler } from "#mcp/server/create-mcp-server";
 import { McpToolControl } from "#mcp/server/tool-control";
 import { CustomMcpRepository } from "#infrastructure/database/custom-mcp-repository";
 import { CustomMcpManager } from "#mcp/custom/manager";
+import { AgentCustomMcpStore } from "#plugins/agent/custom-mcp-store";
+import {
+  AgentMcpGateway,
+  createAgentMcpServer,
+} from "#plugins/agent/mcp-gateway";
 import { HttpServer } from "#infrastructure/http/http-server";
 import type { LogService } from "#core/logging/types";
 
@@ -38,6 +44,9 @@ export interface ApplicationComponents {
   operations: OperationLog;
   plugins: PluginManager;
   customMcp: CustomMcpManager;
+  agentCustomMcp: CustomMcpManager;
+  agentMcpGateway: AgentMcpGateway;
+  agentMcpTools: McpToolControl;
   processes: import("#plugins/process/process-supervisor").ProcessSupervisor;
   cloud: import("#plugins/cloud/controller").CloudController;
   computer: import("#plugins/computer/computer-service").ComputerService;
@@ -50,6 +59,10 @@ export async function createApplication(
   logs: LogService,
 ): Promise<ApplicationComponents> {
   const database = new AppDatabase(config.databasePath);
+  let gatewayForCleanup: AgentMcpGateway | null = null;
+  let agentCustomMcpForCleanup: CustomMcpManager | null = null;
+  let customMcpForCleanup: CustomMcpManager | null = null;
+  let pluginsForCleanup: PluginManager | null = null;
   try {
     const eventBus = new RuntimeEventBus();
     const operations = new OperationLog(
@@ -67,6 +80,30 @@ export async function createApplication(
       operations,
       config.dataDir,
     );
+    customMcpForCleanup = customMcp;
+    const agentMcpSettings = new AgentMcpSettingsRepository(database);
+    const agentMcpTools = new McpToolControl(agentMcpSettings, false);
+    const agentCustomMcp = new CustomMcpManager(
+      new AgentCustomMcpStore(
+        new CustomMcpRepository(database),
+        agentMcpSettings,
+      ),
+      agentMcpTools,
+      operations,
+      config.dataDir,
+      "agent_mcp",
+    );
+    agentCustomMcpForCleanup = agentCustomMcp;
+    let plugins: PluginManager | null = null;
+    const agentMcpGateway = new AgentMcpGateway(() =>
+      createAgentMcpServer((server) => {
+        if (!plugins) throw new Error("Agent MCP gateway is not initialized");
+        plugins.registerMcp(server, agentMcpTools, { agentMode: true });
+        agentCustomMcp.registerMcp(server);
+      }),
+    );
+    await agentMcpGateway.start();
+    gatewayForCleanup = agentMcpGateway;
     const externalAccess = new ExternalAccessRegistry(config.auth);
     const auth = new AuthService(
       new OAuthRepository(database),
@@ -75,13 +112,16 @@ export async function createApplication(
     );
     const passkeys = new PasskeyService(new PasskeyRepository(database));
     const services = new ServiceRegistry();
-    const plugins = new PluginManager(
+    plugins = new PluginManager(
       {
         config,
         database,
         operations,
         mcpTools,
         customMcp,
+        agentMcp: agentMcpGateway.connection(),
+        agentMcpTools,
+        agentCustomMcp,
         events: eventBus,
         externalAccess,
         services,
@@ -97,13 +137,17 @@ export async function createApplication(
         createWebPlugin(),
       ],
     );
+    pluginsForCleanup = plugins;
     await plugins.start();
+    plugins.defineMcp(agentMcpTools, { agentMode: true });
     customMcp.start();
+    agentCustomMcp.start();
+    const activePlugins = plugins;
     const web = services.require(WebServiceToken);
     const processes = services.require(ProcessServiceToken);
     const cloud = services.require(CloudServiceToken);
     const computer = services.require(ComputerServiceToken);
-    const mcp = createChatRoomMcpHandler(plugins, customMcp);
+    const mcp = createChatRoomMcpHandler(activePlugins, customMcp);
     const http = new HttpServer(
       config,
       web.application,
@@ -119,8 +163,11 @@ export async function createApplication(
       database,
       eventBus,
       operations,
-      plugins,
+      plugins: activePlugins,
       customMcp,
+      agentCustomMcp,
+      agentMcpGateway,
+      agentMcpTools,
       processes,
       cloud,
       computer,
@@ -128,7 +175,25 @@ export async function createApplication(
       logs,
     };
   } catch (error) {
-    database.close();
+    // Startup can fail after the loopback gateway has bound its ephemeral port.
+    // Tear down resources in reverse construction order before closing the DB.
+    for (const cleanup of [
+      () => pluginsForCleanup?.stop(),
+      () => gatewayForCleanup?.close(),
+      () => agentCustomMcpForCleanup?.close(),
+      () => customMcpForCleanup?.close(),
+    ]) {
+      try {
+        await cleanup();
+      } catch {
+        /* preserve the startup error */
+      }
+    }
+    try {
+      database.close();
+    } catch {
+      /* preserve the startup error */
+    }
     throw error;
   }
 }

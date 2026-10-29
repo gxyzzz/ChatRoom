@@ -231,8 +231,16 @@ async function route(event) {
   const url = new URL(request.url);
   // Explicit HTTP selection and timed-out P2P downloads must stay on HTTP.
   if (
-    url.pathname === "/api/workspace/file/download" &&
+    url.pathname.startsWith("/api/workspace/file/") &&
     url.searchParams.get("__chatroom_http") === "1"
+  )
+    return fetch(request);
+  // Keep conditional cache validation on the native HTTP path. Browsers handle
+  // HTTP 304 cache merging, while a synthetic Service Worker 304 is unreliable.
+  if (
+    request.method === "GET" &&
+    (request.headers.has("if-none-match") ||
+      request.headers.has("if-modified-since"))
   )
     return fetch(request);
   if (!activeClients.has(event.clientId)) return fetch(request);
@@ -348,7 +356,9 @@ async function route(event) {
     return new Response("P2P request status unknown", { status: 504 });
   }
 
-  // Once accepted, a mutation may already have executed. No HTTP retry.
+  // Once accepted, a mutation may already have executed. Only retry GETs
+  // when the P2P response has not started, because GET is safe to repeat.
+  let retryHttp = false;
   const response = await new Promise((resolve) => {
     let controller;
     let finished = false;
@@ -356,6 +366,7 @@ async function route(event) {
     let lastChunkCredit = 0;
     const timer = setTimeout(() => {
       if (!opened) {
+        retryHttp = request.method === "GET";
         resolve(new Response("P2P response timed out", { status: 504 }));
         reply.postMessage({ type: "cancel" });
         close();
@@ -391,6 +402,7 @@ async function route(event) {
         opened = true;
         const status = data.status;
         if (!Number.isInteger(status) || status < 200 || status > 599) {
+          retryHttp = request.method === "GET";
           close();
           resolve(Response.error());
           return;
@@ -414,16 +426,20 @@ async function route(event) {
           close();
         }
       } else if (data?.type === "end") {
-        if (!opened) resolve(Response.error());
-        else controller.close();
+        if (!opened) {
+          retryHttp = request.method === "GET";
+          resolve(Response.error());
+        } else controller.close();
         close();
       } else if (data?.type === "error") {
-        if (!opened)
+        if (!opened) {
+          retryHttp = request.method === "GET";
           resolve(new Response("P2P transport interrupted", { status: 502 }));
-        else controller.error(new Error("P2P transport interrupted"));
+        } else controller.error(new Error("P2P transport interrupted"));
         close();
       }
     };
   });
+  if (retryHttp) return fetch(request);
   return response;
 }

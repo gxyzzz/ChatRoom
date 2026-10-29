@@ -239,9 +239,18 @@ export function useAgentHistory(
   }
 
   function removeSession(id: string) {
+    removeSessions([id]);
+  }
+
+  function removeSessions(ids: readonly string[]) {
+    const removed = new Set(ids);
+    if (!removed.size) return;
     requests.invalidate();
-    replaceSessions(sessions.value.filter((session) => session.id !== id));
-    merge({ sessionId: id, turnIds: [], itemIds: [], deleted: true });
+    replaceSessions(
+      sessions.value.filter((session) => !removed.has(session.id)),
+    );
+    for (const id of removed)
+      merge({ sessionId: id, turnIds: [], itemIds: [], deleted: true });
     void drain();
   }
 
@@ -289,6 +298,7 @@ export function useAgentHistory(
     reconcileSession,
     reconcileInteraction,
     removeSession,
+    removeSessions,
   };
 }
 

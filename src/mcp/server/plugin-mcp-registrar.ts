@@ -42,6 +42,7 @@ export class PluginMcpRegistrar {
     private readonly operations: OperationLog,
     private readonly pluginId: string,
     private readonly toolControl: McpToolControl,
+    private readonly options: { agentMode?: boolean } = {},
   ) {}
 
   registerTool<
@@ -60,6 +61,9 @@ export class PluginMcpRegistrar {
       pluginId: this.pluginId,
       title: config.title,
       description: config.description,
+      ...(this.options.agentMode
+        ? { agentAllowed: this.pluginId !== "agent" }
+        : {}),
     });
     if (!this.server) return;
 
@@ -67,7 +71,7 @@ export class PluginMcpRegistrar {
     const callback = mcpTool<PluginToolInput<InputSchema>>(async (input) => {
       const operation = this.operations.start({
         pluginId: this.pluginId,
-        source: "mcp",
+        source: this.options.agentMode ? "agent_mcp" : "mcp",
         action: typeof action === "function" ? action(input) : action,
         input: audit?.input ? audit.input(input) : input,
         ...operationReferences(input),

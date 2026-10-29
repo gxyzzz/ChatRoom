@@ -42,6 +42,7 @@ import {
   type CodexNotification,
   type CodexRequestId,
   type CodexServerRequest,
+  type CodexMcpConnection,
 } from "./rpc.js";
 import {
   array,
@@ -191,8 +192,14 @@ export class CodexProvider implements AgentProvider {
   private readonly client: CodexRpcClient;
   private readonly modelNames = new Map<string, string>();
 
-  constructor(private readonly logs: LogWriter) {
-    this.client = new CodexRpcClient(logs);
+  constructor(
+    private readonly logs: LogWriter,
+    mcpConnection: CodexMcpConnection = {
+      url: "http://127.0.0.1:1/mcp",
+      token: "test-only-token",
+    },
+  ) {
+    this.client = new CodexRpcClient(logs, mcpConnection);
   }
 
   async probe(): Promise<AgentProviderProbe> {
@@ -363,6 +370,10 @@ export class CodexProvider implements AgentProvider {
     const model = models.find((candidate) => candidate.id === modelId);
     if (!model) throw new Error("Unknown Codex model: " + modelId);
     return model.model;
+  }
+
+  async refreshMcpServers(): Promise<void> {
+    await this.client.reloadMcpConfiguration();
   }
 
   close(): Promise<void> {

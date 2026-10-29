@@ -106,6 +106,22 @@ export class AgentRuntime {
     this.store.reconcileInterrupted(new Date().toISOString());
   }
 
+  async refreshMcpServers(): Promise<void> {
+    const results = await Promise.allSettled(
+      [...this.providers.values()].map((provider) =>
+        provider.refreshMcpServers?.(),
+      ),
+    );
+    const failures = results.filter(
+      (result): result is PromiseRejectedResult => result.status === "rejected",
+    );
+    if (failures.length)
+      throw new AggregateError(
+        failures.map((failure) => failure.reason),
+        "Failed to refresh MCP servers for one or more Agent providers",
+      );
+  }
+
   async providerStatuses(): Promise<AgentProviderStatus[]> {
     return Promise.all(
       [...this.providers.values()].map(async (provider) => ({
@@ -701,6 +717,45 @@ export class AgentRuntime {
     return this.withSessionMutation(sessionId, () =>
       this.deleteSessionUnlocked(sessionId),
     );
+  }
+
+  async deleteSessions(sessionIds: readonly string[]): Promise<void> {
+    const ids = [...new Set(sessionIds)];
+    if (ids.length === 0)
+      throw new ChatRoomError(
+        "INVALID_INPUT",
+        "Select at least one Agent session",
+      );
+    if (ids.length > 100)
+      throw new ChatRoomError(
+        "INVALID_INPUT",
+        "Cannot delete more than 100 Agent sessions at once",
+      );
+
+    // Validate every target before changing anything, so active/unknown sessions
+    // cannot cause an avoidable partial batch deletion.
+    for (const id of ids) {
+      this.requireSession(id);
+      if (this.sessionMutations.has(id))
+        throw new ChatRoomError(
+          "CONFLICT",
+          "An Agent session is already being modified",
+        );
+      if (this.activeTurns.has(id))
+        throw new ChatRoomError(
+          "CONFLICT",
+          "Cannot delete a running Agent session",
+        );
+    }
+
+    // Acquire all locks synchronously before the first await, preventing a turn
+    // or another mutation from starting for any member of this batch.
+    for (const id of ids) this.sessionMutations.add(id);
+    try {
+      for (const id of ids) await this.deleteSessionUnlocked(id);
+    } finally {
+      for (const id of ids) this.sessionMutations.delete(id);
+    }
   }
 
   private async deleteSessionUnlocked(sessionId: string): Promise<void> {

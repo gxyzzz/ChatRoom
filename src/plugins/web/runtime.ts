@@ -17,6 +17,8 @@ export class WebRuntime {
     readonly agents: AgentRuntime,
     readonly mcpTools: McpToolControl,
     readonly customMcp: CustomMcpManager,
+    readonly agentMcpTools: McpToolControl,
+    readonly agentCustomMcp: CustomMcpManager,
   ) {}
 
   processKill(processId: string, force = false) {

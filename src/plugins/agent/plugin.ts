@@ -18,7 +18,7 @@ export function createAgentPlugin(): InternalPlugin {
         new AgentRepository(context.database),
         context.services.require(WorkspaceAccessToken),
         context.events,
-        createAgentProviders(context.logs),
+        createAgentProviders(context.logs, context.agentMcp),
       );
       await runtime.cleanupOrphanAttachments();
       attachmentCleanupTimer = setInterval(

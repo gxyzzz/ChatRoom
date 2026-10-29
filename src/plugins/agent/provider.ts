@@ -39,6 +39,7 @@ export interface AgentProvider {
     providerSessionId: string,
   ): Promise<ProviderSession>;
   close(): Promise<void>;
+  refreshMcpServers?(): Promise<void>;
 }
 
 export interface ProviderSession {

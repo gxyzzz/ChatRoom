@@ -52,6 +52,9 @@ const selectedId = shallowRef<string | null>(null);
 const loading = shallowRef(false);
 const composerBusy = shallowRef(false);
 const error = shallowRef("");
+const bulkDeleteDialog = shallowRef(false);
+const bulkDeleteIds = shallowRef<string[]>([]);
+const bulkDeleting = shallowRef(false);
 
 const {
   sessions,
@@ -61,6 +64,7 @@ const {
   reconcileSession,
   reconcileInteraction,
   removeSession,
+  removeSessions,
 } = useAgentHistory(selectedId, {
   onError: (cause) => {
     error.value = errorMessage(cause);
@@ -233,6 +237,32 @@ function handleSessionCreated(session: AgentSession) {
   selectedId.value = session.id;
 }
 
+function openBulkDelete(sessionIds: string[]) {
+  bulkDeleteIds.value = [...new Set(sessionIds)];
+  bulkDeleteDialog.value = bulkDeleteIds.value.length > 0;
+}
+
+async function deleteSelectedSessions() {
+  if (bulkDeleting.value || !bulkDeleteIds.value.length) return;
+  const ids = [...bulkDeleteIds.value];
+  bulkDeleting.value = true;
+  error.value = "";
+  try {
+    await api("/agents/sessions/bulk-delete", {
+      method: "POST",
+      body: JSON.stringify({ sessionIds: ids }),
+    });
+    removeSessions(ids);
+    bulkDeleteDialog.value = false;
+    bulkDeleteIds.value = [];
+    await refreshFromEvent(null);
+  } catch (cause) {
+    error.value = errorMessage(cause);
+  } finally {
+    bulkDeleting.value = false;
+  }
+}
+
 function usageLabel(usage: NonNullable<AgentSession["tokenUsage"]>): string {
   const format = (value: number) =>
     new Intl.NumberFormat(appIntlLocale(locale.current.value), {
@@ -303,8 +333,9 @@ function providerIcon(provider: AgentProviderId): string | null {
       :workspaces="workspaces"
       :sessions="sessions"
       :loading="loading"
-      :error="error"
+      :error="!selected || compact ? error : ''"
       @created="handleSessionCreated"
+      @bulk-delete="openBulkDelete"
     />
 
     <v-card v-if="selected" class="agent-main panel-card" tabindex="-1">
@@ -323,11 +354,7 @@ function providerIcon(provider: AgentProviderId): string | null {
         @switch-provider="switchProvider"
       />
       <v-divider />
-      <div
-        v-if="error && compact"
-        class="agent-error agent-main-error"
-        role="alert"
-      >
+      <div v-if="error" class="agent-error agent-main-error" role="alert">
         <v-icon icon="$mdiAlertCircleOutline" size="18" />
         <span>{{ error }}</span>
       </div>
@@ -492,6 +519,12 @@ function providerIcon(provider: AgentProviderId): string | null {
       :busy="deletingSession"
       @confirm="deleteSession"
     />
+    <AgentDeleteDialog
+      v-model="bulkDeleteDialog"
+      :busy="bulkDeleting"
+      :count="bulkDeleteIds.length"
+      @confirm="deleteSelectedSessions"
+    />
   </div>
 </template>
 
@@ -544,5 +577,24 @@ function providerIcon(provider: AgentProviderId): string | null {
 .agent-error {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+.agent-main-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+  margin: 8px 20px 0;
+  padding: 0;
+}
+
+.agent-main-error > :deep(.v-icon) {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+.agent-main-error > span {
+  min-width: 0;
+  flex: 1 1 auto;
 }
 </style>

@@ -58,7 +58,7 @@ function saveBlob(blob: Blob, name: string): void {
 /** Marker understood only by the Service Worker; no server behavior changes. */
 function httpDownloadUrl(url: string): string {
   const target = new URL(url, window.location.origin);
-  if (target.pathname === "/api/workspace/file/download")
+  if (target.pathname.startsWith("/api/workspace/file/"))
     target.searchParams.set("__chatroom_http", "1");
   return target.pathname + target.search + target.hash;
 }
@@ -81,6 +81,61 @@ export class DownloadHttpError extends Error {
   }
 }
 
+interface FileTransferResult {
+  mode: DownloadMode;
+  total: number | null;
+  received: number;
+}
+
+async function writeResponseToFile(
+  response: Response,
+  file: FileSystemFileHandle,
+  signal: AbortSignal,
+  onStart: (mode: DownloadMode, total: number | null) => void,
+  onProgress: (received: number) => void,
+): Promise<FileTransferResult> {
+  if (!response.ok) throw new DownloadHttpError(response.status);
+
+  const mode: DownloadMode =
+    response.headers.get("x-chatroom-transport") === "p2p" ? "p2p" : "http";
+  const sizeHeader = response.headers.get("content-length");
+  const total =
+    sizeHeader !== null && /^\d+$/.test(sizeHeader) ? Number(sizeHeader) : null;
+  onStart(mode, total);
+  if (!response.body)
+    throw new Error("The browser does not support streaming responses");
+
+  const reader = response.body.getReader();
+  let writable: FileSystemWritableFileStream | null = null;
+  let received = 0;
+  let committed = false;
+  try {
+    writable = await file.createWritable();
+    while (true) {
+      if (signal.aborted)
+        throw new DOMException("Download canceled", "AbortError");
+      const { done, value } = await reader.read();
+      if (done) break;
+      received += value.byteLength;
+      if (total !== null && received > total)
+        throw new Error("Downloaded file exceeds the declared length");
+      await writable.write(value);
+      onProgress(received);
+    }
+    if (total !== null && received !== total)
+      throw new Error("Downloaded file length does not match the response");
+    await writable.close();
+    committed = true;
+  } finally {
+    if (!committed) {
+      await reader.cancel().catch(() => {});
+      await writable?.abort().catch(() => {});
+    }
+    reader.releaseLock();
+  }
+  return { mode, total, received };
+}
+
 /**
  * One download entry point for Workspace, Agent and shared links.
  * The Service Worker decides P2P vs HTTP; this module only chooses the
@@ -99,6 +154,8 @@ export async function downloadFile(
   let lastUpdate = 0;
   let mode: DownloadMode = "http";
   let total: number | null = null;
+  let attemptedP2p = false;
+  let file: FileSystemFileHandle | null = null;
 
   function progress(phase: DownloadPhase, error: string | null = null): void {
     const now = performance.now();
@@ -120,7 +177,6 @@ export async function downloadFile(
   try {
     // Must be invoked synchronously from the user gesture, before fetch().
     const picker = (window as SavePicker).showSaveFilePicker;
-    let file: FileSystemFileHandle | null = null;
     if (picker) {
       try {
         file = await picker.call(window, { suggestedName: name });
@@ -146,26 +202,41 @@ export async function downloadFile(
     // later should not silently reroute an HTTP fallback to P2P.
     const readyForP2p =
       rtcConnected.value && Boolean(navigator.serviceWorker?.controller);
+    attemptedP2p = readyForP2p;
     const requestUrl = readyForP2p ? url : httpDownloadUrl(url);
 
     if (!file) {
       // A same-origin Service Worker supplies the browser's native download
       // manager with a streaming P2P response, without buffering in the page.
       if (readyForP2p) {
-        const saved = await browserStreamDownload(
-          requestUrl,
-          name,
-          controller.signal,
-          (event) => {
-            if (event.mode) mode = event.mode;
-            if (event.total !== undefined) total = event.total;
-            if (event.received !== undefined) received = event.received;
-            progress(event.phase);
-          },
-        );
-        if (saved) return;
+        try {
+          const saved = await browserStreamDownload(
+            requestUrl,
+            name,
+            controller.signal,
+            (event) => {
+              if (event.mode) mode = event.mode;
+              if (event.total !== undefined) total = event.total;
+              if (event.received !== undefined) received = event.received;
+              progress(event.phase);
+            },
+          );
+          if (saved) return;
+        } catch (cause) {
+          if (
+            controller.signal.aborted ||
+            (cause as Error)?.name === "AbortError" ||
+            cause instanceof DownloadHttpError
+          )
+            throw cause;
+          // A native download cannot resume a broken P2P stream. Start a new
+          // HTTP download from byte zero instead of leaving a partial file.
+        }
       }
       mode = "http";
+      received = 0;
+      total = null;
+      lastUpdate = 0;
       nativeDownload(httpDownloadUrl(url), name);
       progress("started");
       return;
@@ -175,43 +246,72 @@ export async function downloadFile(
       signal: controller.signal,
       cache: "no-store",
     });
-    if (!response.ok) throw new DownloadHttpError(response.status);
-    if (!response.body)
-      throw new Error("The browser does not support streaming responses");
-    mode =
-      response.headers.get("x-chatroom-transport") === "p2p" ? "p2p" : "http";
-    const sizeHeader = response.headers.get("content-length");
-    if (sizeHeader !== null && /^\d+$/.test(sizeHeader))
-      total = Number(sizeHeader);
-
-    const writable = await file.createWritable();
-    const reader = response.body.getReader();
-    let committed = false;
-    try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        received += value.byteLength;
-        if (total !== null && received > total)
-          throw new Error("Downloaded file exceeds the declared length");
-        await writable.write(value);
+    const result = await writeResponseToFile(
+      response,
+      file,
+      controller.signal,
+      (nextMode, nextTotal) => {
+        mode = nextMode;
+        total = nextTotal;
+        received = 0;
+      },
+      (nextReceived) => {
+        received = nextReceived;
         progress("transferring");
-      }
-      if (total !== null && received !== total)
-        throw new Error("Downloaded file length does not match the response");
-      await writable.close();
-      committed = true;
-    } finally {
-      if (!committed) {
-        await reader.cancel().catch(() => {});
-        await writable.abort().catch(() => {});
-      }
-      reader.releaseLock();
-    }
+      },
+    );
+    mode = result.mode;
+    total = result.total;
+    received = result.received;
     progress("finished");
   } catch (cause) {
     if (controller.signal.aborted || (cause as Error)?.name === "AbortError")
       return;
+    if (file && attemptedP2p && !(cause instanceof DownloadHttpError)) {
+      try {
+        mode = "http";
+        received = 0;
+        total = null;
+        lastUpdate = 0;
+        progress("transferring");
+        const response = await fetch(httpDownloadUrl(url), {
+          signal: controller.signal,
+          cache: "no-store",
+        });
+        const result = await writeResponseToFile(
+          response,
+          file,
+          controller.signal,
+          (nextMode, nextTotal) => {
+            mode = nextMode;
+            total = nextTotal;
+            received = 0;
+          },
+          (nextReceived) => {
+            received = nextReceived;
+            progress("transferring");
+          },
+        );
+        mode = result.mode;
+        total = result.total;
+        received = result.received;
+        progress("finished");
+        return;
+      } catch (fallbackCause) {
+        if (
+          controller.signal.aborted ||
+          (fallbackCause as Error)?.name === "AbortError"
+        )
+          return;
+        progress(
+          "failed",
+          fallbackCause instanceof Error
+            ? fallbackCause.message
+            : String(fallbackCause),
+        );
+        throw fallbackCause;
+      }
+    }
     progress("failed", cause instanceof Error ? cause.message : String(cause));
     throw cause;
   } finally {
