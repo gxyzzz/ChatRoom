@@ -10,7 +10,6 @@ import type {
   WorkspaceEntry,
 } from "../api.js";
 import {
-  agentFileName,
   agentModelDisplayName,
   agentProviderIcon,
   agentProviderName,
@@ -46,8 +45,7 @@ const filteredSessions = computed(() => {
   return props.sessions.filter((session) => {
     const haystack = [
       agentProviderName(props.providers, session.provider),
-      session.workspaceRoot,
-      agentFileName(session.workspaceRoot),
+      session.workspaceName,
       modelDisplayName(session.provider, session.model),
       session.status,
     ]
@@ -338,7 +336,7 @@ function sessionStatusText(session: AgentSession): string {
             }}</span>
           </v-list-item-title>
           <v-list-item-subtitle>
-            {{ agentFileName(session.workspaceRoot) }}
+            {{ session.workspaceName }}
             <template v-if="session.model">
               · {{ modelDisplayName(session.provider, session.model) }}
             </template>

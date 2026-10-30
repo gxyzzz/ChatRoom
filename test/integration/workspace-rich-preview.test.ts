@@ -7,6 +7,10 @@ import { createTestRuntime } from "../helpers/runtime.js";
 test("workspace document and media preview stream full and byte-range responses safely", async () => {
   const runtime = await createTestRuntime();
   try {
+    const workspace = runtime.components.database.raw
+      .prepare("SELECT id FROM workspaces WHERE path=?")
+      .get(runtime.workspaceRoot) as { id: string } | undefined;
+    assert.ok(workspace);
     const bytes = Buffer.from("%PDF-1.7\n" + "x".repeat(3 * 1024 * 1024));
     await writeFile(path.join(runtime.workspaceRoot, "sample.pdf"), bytes);
     await writeFile(path.join(runtime.workspaceRoot, "movie.mp4"), bytes);
@@ -24,8 +28,8 @@ test("workspace document and media preview stream full and byte-range responses 
     const address = runtime.components.http.address();
     assert.ok(address);
     const url = (pathName: string) =>
-      `http://127.0.0.1:${address.port}/api/workspace/file/preview?root=` +
-      encodeURIComponent(runtime.workspaceRoot) +
+      `http://127.0.0.1:${address.port}/api/workspace/file/preview?workspaceId=` +
+      encodeURIComponent(workspace.id) +
       "&path=" +
       encodeURIComponent(pathName);
 
@@ -98,6 +102,10 @@ test("workspace document and media preview stream full and byte-range responses 
 test("SVG preview is served with restrictive CSP and correct MIME", async () => {
   const runtime = await createTestRuntime();
   try {
+    const workspace = runtime.components.database.raw
+      .prepare("SELECT id FROM workspaces WHERE path=?")
+      .get(runtime.workspaceRoot) as { id: string } | undefined;
+    assert.ok(workspace);
     const svg =
       '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script><circle r="10"/></svg>';
     await writeFile(path.join(runtime.workspaceRoot, "drawing.svg"), svg);
@@ -105,8 +113,8 @@ test("SVG preview is served with restrictive CSP and correct MIME", async () => 
     const address = runtime.components.http.address();
     assert.ok(address);
     const url =
-      `http://127.0.0.1:${address.port}/api/workspace/file/image?root=` +
-      encodeURIComponent(runtime.workspaceRoot) +
+      `http://127.0.0.1:${address.port}/api/workspace/file/image?workspaceId=` +
+      encodeURIComponent(workspace.id) +
       "&path=drawing.svg";
     const result = await fetch(url);
     assert.equal(result.status, 200);

@@ -95,8 +95,8 @@ const canCreate = computed(() => {
 watch(
   () => props.workspaces,
   (next) => {
-    if (!workspace.value || !next.some((item) => item.root === workspace.value))
-      workspace.value = next[0]?.root ?? null;
+    if (!workspace.value || !next.some((item) => item.id === workspace.value))
+      workspace.value = next[0]?.id ?? null;
   },
   { immediate: true },
 );
@@ -141,7 +141,7 @@ async function createSession() {
     const session = await api<AgentSession>("/agents/sessions", {
       method: "POST",
       body: JSON.stringify({
-        workspaceRoot: workspace.value,
+        workspaceId: workspace.value,
         provider: provider.value,
         model: model.value,
         reasoningEffort: reasoningEffort.value,
@@ -210,7 +210,7 @@ function effortItems(value: AgentModel | null) {
       v-model="workspace"
       :items="workspaces"
       item-title="name"
-      item-value="root"
+      item-value="id"
       :label="locale.t('$vuetify.chatroom.agents.workspace')"
       density="compact"
       hide-details

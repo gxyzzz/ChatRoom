@@ -371,14 +371,21 @@ async function createRuntimeFixture(
   const database = new AppDatabase(path.join(root, "data", "chatroom.sqlite"));
   const events = new RuntimeEventBus();
   const repository = new AgentRepository(database);
-  const runtime = new AgentRuntime(
-    repository,
-    await WorkspaceService.create([root], { projectFiles: async () => null }),
-    events,
-    [provider, ...additionalProviders],
+  const workspaces = await WorkspaceService.create(
+    [root],
+    { projectFiles: async () => null },
+    database,
   );
+  const workspaceId = (await workspaces.list()).find(
+    (item) => item.path === workspace,
+  )?.id;
+  if (!workspaceId) throw new Error("Test workspace was not discovered");
+  const runtime = new AgentRuntime(repository, workspaces, events, [
+    provider,
+    ...additionalProviders,
+  ]);
   const session = await runtime.createSession({
-    workspaceRoot: workspace,
+    workspaceId,
     provider: "codex",
     ...defaultConfig,
     model: "test-model",
@@ -410,11 +417,16 @@ test("AgentRepository startup reconciliation keeps session timestamps monotonic"
     const candidate = "2026-01-01T00:00:00.123Z";
     database.raw
       .prepare(
-        "INSERT INTO agent_sessions(id, workspace_root, provider, status, created_at, updated_at) VALUES(?,?,?,?,?,?)",
+        "INSERT INTO workspaces(id, path, manually_registered, state) VALUES(?,?,1,'available')",
+      )
+      .run("ws_reconcile", "/workspace");
+    database.raw
+      .prepare(
+        "INSERT INTO agent_sessions(id, workspace_id, provider, status, created_at, updated_at) VALUES(?,?,?,?,?,?)",
       )
       .run(
         "agent_reconcile",
-        "/workspace",
+        "ws_reconcile",
         "codex",
         "running",
         current,
@@ -492,7 +504,7 @@ test("deleting an Agent session cleans only that session's uploaded files", asyn
   const fixture = await createRuntimeFixture();
   try {
     const otherSession = await fixture.runtime.createSession({
-      workspaceRoot: fixture.workspace,
+      workspaceId: fixture.session.workspaceId,
       provider: "codex",
       ...defaultConfig,
       model: "test-model",
@@ -670,9 +682,11 @@ test("AgentRuntime persists independent provider settings and usage across switc
     const nextSecondary = new StreamingProvider("secondary");
     restarted = new AgentRuntime(
       repository,
-      await WorkspaceService.create([fixture.root], {
-        projectFiles: async () => null,
-      }),
+      await WorkspaceService.create(
+        [fixture.root],
+        { projectFiles: async () => null },
+        fixture.database,
+      ),
       fixture.events,
       [nextCodex, nextSecondary],
     );
@@ -1133,7 +1147,7 @@ test("Agent MCP schemas and actions retain rich capabilities, settings, turns, a
     });
     assert.equal(
       mcp.tools.get("agent_create")!.config.inputSchema.safeParse({
-        workspaceRoot: fixture.workspace,
+        workspaceId: fixture.session.workspaceId,
         provider: "custom-agent",
       }).success,
       true,
@@ -1147,7 +1161,7 @@ test("Agent MCP schemas and actions retain rich capabilities, settings, turns, a
       permissionMode: "danger-full-access",
     } as const;
     const created = (await mcp.call("agent_create", {
-      workspaceRoot: fixture.workspace,
+      workspaceId: fixture.session.workspaceId,
       provider: "codex",
       ...config,
     })) as { id: string };

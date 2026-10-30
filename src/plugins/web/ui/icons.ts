@@ -1,4 +1,9 @@
 import {
+  mdiDeleteForeverOutline,
+  mdiFolderCogOutline,
+  mdiFolderRemoveOutline,
+  mdiFolderSync,
+  mdiPencil,
   mdiAccountOutline,
   mdiAlertCircleOutline,
   mdiArrowLeft,
@@ -53,6 +58,11 @@ import {
 } from "@mdi/js";
 
 export const chatroomIconAliases = {
+  mdiDeleteForeverOutline,
+  mdiFolderCogOutline,
+  mdiFolderRemoveOutline,
+  mdiFolderSync,
+  mdiPencil,
   mdiAccountOutline,
   mdiAlertCircleOutline,
   mdiArrowLeft,

@@ -14,12 +14,12 @@ import MarkdownContent from "./MarkdownContent.vue";
 import { workspaceDownloadUrl } from "../utils/workspace-download.js";
 import { downloadFile } from "../utils/download.js";
 
-const props = defineProps<{ root: string }>();
+const props = defineProps<{ workspaceId: string }>();
 const locale = useLocale();
 const markdownMode = shallowRef<"preview" | "source">("preview");
 const imageLoading = shallowRef(false);
 const imageError = shallowRef(false);
-const workspaceFiles = useWorkspaceFiles(() => props.root);
+const workspaceFiles = useWorkspaceFiles(() => props.workspaceId);
 const {
   entries,
   file,
@@ -61,9 +61,10 @@ const selectedFile = computed(() =>
 function downloadSelected(): void {
   if (!selectedFile.value) return;
   const path = selectedFile.value.path;
-  void downloadFile(workspaceDownloadUrl(props.root, path), nameOf(path)).catch(
-    () => {},
-  );
+  void downloadFile(
+    workspaceDownloadUrl(props.workspaceId, path),
+    nameOf(path),
+  ).catch(() => {});
 }
 
 function typeLabel(type: string): string {

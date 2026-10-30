@@ -16,9 +16,10 @@ const WorkspaceDownloadPreview = defineAsyncComponent(
 
 const locale = useLocale();
 const params = new URLSearchParams(window.location.search);
-const workspace = params.get("workspace");
+const workspaceId = params.get("workspaceId");
 const path = params.get("path");
-const url = workspace && path ? workspaceDownloadUrl(workspace, path) : null;
+const url =
+  workspaceId && path ? workspaceDownloadUrl(workspaceId, path) : null;
 const fileName = path?.split(/[\\/]/).pop() || "";
 const busy = shallowRef(false);
 const previewOpen = shallowRef(false);
@@ -142,9 +143,9 @@ async function download() {
       </template>
     </v-empty-state>
     <WorkspaceDownloadPreview
-      v-if="previewOpen && workspace && path"
+      v-if="previewOpen && workspaceId && path"
       v-model="previewOpen"
-      :workspace="workspace"
+      :workspace-id="workspaceId"
       :path="path"
     />
   </v-main>

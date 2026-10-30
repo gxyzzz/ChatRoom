@@ -179,7 +179,8 @@ export interface AgentSessionAttention {
 
 export interface AgentSession extends AgentSessionConfig {
   id: string;
-  workspaceRoot: string;
+  workspaceId: string;
+  workspaceName: string;
   provider: AgentProviderId;
   status: AgentSessionStatus;
   attention: AgentSessionAttention | null;
@@ -363,7 +364,7 @@ export interface AgentTurnInput {
 }
 
 export interface CreateAgentSessionInput extends Partial<AgentSessionConfig> {
-  workspaceRoot: string;
+  workspaceId: string;
   provider: AgentProviderId;
   model: string | null;
 }

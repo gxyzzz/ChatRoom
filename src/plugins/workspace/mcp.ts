@@ -6,19 +6,21 @@ import { closedRead } from "#mcp/server/tool-support";
 import type { WorkspaceService } from "./workspace-service.js";
 
 const workspaceEntrySchema = z.object({
-  root: z.string(),
+  id: z.string(),
+  path: z.string(),
   name: z.string(),
   summary: z.string().nullable(),
+  status: z.enum(["available", "missing", "restore_pending", "unregistered"]),
+  source: z.enum(["configured", "manual", "both", "history"]),
+  manuallyRegistered: z.boolean(),
+  discovered: z.boolean(),
 });
 
 const workspaceListSchema = z.object({
   workspaces: z.array(workspaceEntrySchema),
 });
 
-const workspaceInfoSchema = z.object({
-  root: z.string(),
-  name: z.string(),
-  summary: z.string().nullable(),
+const workspaceInfoSchema = workspaceEntrySchema.extend({
   presetPrompt: z.string().nullable(),
   instructions: z.string().nullable(),
   skills: z.array(
@@ -40,7 +42,7 @@ export function registerWorkspaceTools(
     {
       title: "List workspaces",
       description:
-        "List available projects with their workspace roots, names, and project summaries from the workspace prompt metadata. Use this first to identify the relevant project before calling workspace_info for its full prompt, instructions, and skills.",
+        "List available projects with stable workspace IDs, display names, paths, and project summaries. Use the ID for all subsequent workspace operations; the path is informational and is not an identifier.",
       inputSchema: z.object({}),
       outputSchema: workspaceListSchema,
       annotations: closedRead,
@@ -54,13 +56,13 @@ export function registerWorkspaceTools(
     {
       title: "Workspace info",
       description:
-        "Read the complete workspace context for a project, including its summary, preset prompt, project instructions, and skill metadata.",
-      inputSchema: z.object({ root: z.string() }),
+        "Read the complete context for a project by workspace ID, including summary, preset prompt, project instructions, and skill metadata.",
+      inputSchema: z.object({ workspaceId: z.string().min(1) }),
       outputSchema: workspaceInfoSchema,
       annotations: closedRead,
       action: "info",
     },
-    (input) => workspaces.info(input.root),
+    (input) => workspaces.info(input.workspaceId),
   );
 
   mcp.registerTool(
@@ -68,19 +70,20 @@ export function registerWorkspaceTools(
     {
       title: "Get workspace file",
       description:
-        "Read a file from a workspace in bounded chunks, or return a browser download link protected by the normal ChatRoom Web login. " +
+        "Read a file from a project identified by workspaceId in bounded chunks, or return a browser download link protected by the normal ChatRoom Web login. " +
         "Use mode=content with encoding=utf8 for text and encoding=base64 for binary files; advance offset with nextOffset for large files. " +
         "Use mode=link to give the user a download link when the Web service has a configured public address. " +
         "Links do not contain credentials and the user must log in to ChatRoom Web to download.",
       inputSchema: z.object({
-        root: z.string(),
-        path: z.string(),
+        workspaceId: z.string().min(1),
+        path: z.string().min(1),
         mode: z.enum(["content", "link"]).default("content"),
         encoding: z.enum(["utf8", "base64"]).default("utf8"),
         offset: z.number().int().nonnegative().default(0),
         maxBytes: z.number().int().min(1).max(262144).default(65536),
       }),
       outputSchema: z.object({
+        workspaceId: z.string(),
         mode: z.enum(["content", "link"]),
         path: z.string(),
         name: z.string(),
@@ -96,7 +99,7 @@ export function registerWorkspaceTools(
       action: "file.get",
       audit: {
         input: (input) => ({
-          root: input.root,
+          workspaceId: input.workspaceId,
           path: input.path,
           mode: input.mode,
           offset: input.mode === "content" ? input.offset : undefined,
@@ -118,7 +121,7 @@ export function registerWorkspaceTools(
       },
     },
     async (input) => {
-      const fs = await workspaces.fs(input.root);
+      const fs = await workspaces.fs(input.workspaceId);
       const name = path.posix.basename(input.path.replaceAll("\\", "/"));
       if (input.mode === "link") {
         const base = webBaseUrl();
@@ -129,9 +132,10 @@ export function registerWorkspaceTools(
           );
         const info = await fs.fileInfo(input.path);
         const url = new URL("/download", base);
-        url.searchParams.set("workspace", path.basename(fs.root));
+        url.searchParams.set("workspaceId", input.workspaceId);
         url.searchParams.set("path", input.path);
         return {
+          workspaceId: input.workspaceId,
           mode: "link" as const,
           path: input.path,
           name,
@@ -178,6 +182,7 @@ export function registerWorkspaceTools(
       }
       const next = input.offset + consumed;
       return {
+        workspaceId: input.workspaceId,
         mode: "content" as const,
         path: input.path,
         name,

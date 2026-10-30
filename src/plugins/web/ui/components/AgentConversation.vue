@@ -87,7 +87,7 @@ async function showOlderTurns() {
           v-for="entry in visibleTurns"
           :key="entry.turn.id"
           :entry="entry"
-          :workspace-root="history?.session.workspaceRoot ?? ''"
+          :workspace-id="history?.session.workspaceId ?? ''"
           :provider-names="providerNames"
           :provider-icons="providerIcons"
         />

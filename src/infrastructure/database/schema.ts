@@ -108,15 +108,25 @@ export const DATABASE_SCHEMA = `
     updated_at TEXT NOT NULL
   );
 
+  CREATE TABLE IF NOT EXISTS workspaces (
+    id TEXT PRIMARY KEY,
+    path TEXT NOT NULL UNIQUE,
+    name_override TEXT,
+    manually_registered INTEGER NOT NULL DEFAULT 0 CHECK(manually_registered IN (0, 1)),
+    discovered_from TEXT,
+    state TEXT NOT NULL DEFAULT 'available' CHECK(state IN ('available', 'missing', 'restore_pending'))
+  );
+
   CREATE TABLE IF NOT EXISTS agent_sessions (
     id TEXT PRIMARY KEY,
-    workspace_root TEXT NOT NULL,
+    workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE RESTRICT,
     provider TEXT NOT NULL,
     status TEXT NOT NULL CHECK(status IN ('idle','running','waiting_input','error')),
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
   );
   CREATE INDEX IF NOT EXISTS agent_sessions_updated_idx ON agent_sessions(updated_at DESC);
+  CREATE INDEX IF NOT EXISTS agent_sessions_workspace_idx ON agent_sessions(workspace_id);
 
   CREATE TABLE IF NOT EXISTS agent_turns (
     id TEXT PRIMARY KEY,

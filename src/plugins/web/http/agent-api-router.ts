@@ -57,7 +57,7 @@ export function createAgentApiRouter(agents: AgentRuntime): Router {
       const body = bodyRecord(req.body);
       res.json(
         await agents.createSession({
-          workspaceRoot: requireString(body.workspaceRoot, "workspaceRoot"),
+          workspaceId: requireString(body.workspaceId, "workspaceId"),
           provider: requireProvider(requireString(body.provider, "provider")),
           model: null,
           reasoningEffort: null,

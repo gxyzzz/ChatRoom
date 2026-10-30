@@ -192,7 +192,7 @@ const canSend = computed(
 );
 
 watch(
-  () => [props.session.id, props.session.workspaceRoot] as const,
+  () => [props.session.id, props.session.workspaceId] as const,
   () => {
     resetSessionState();
     void loadProjectFiles();
@@ -215,16 +215,16 @@ onBeforeUnmount(() => {
 async function loadProjectFiles() {
   const request = projectFilesRequests.begin();
   const sessionId = props.session.id;
-  const root = props.session.workspaceRoot;
+  const workspaceId = props.session.workspaceId;
   try {
     const next = await api<WorkspaceProjectFiles>(
-      "/workspace/project-files?root=" + encodeURIComponent(root),
+      "/workspace/project-files?workspaceId=" + encodeURIComponent(workspaceId),
       { timeoutMs: 20_000, signal: request.signal },
     );
     if (
       !projectFilesRequests.isCurrent(request) ||
       props.session.id !== sessionId ||
-      props.session.workspaceRoot !== root
+      props.session.workspaceId !== workspaceId
     )
       return;
     projectFilePaths.value = next.paths;
@@ -300,7 +300,7 @@ async function uploadLocalFiles(event: Event) {
   if (!files.length) return;
 
   const sessionId = props.session.id;
-  const root = props.session.workspaceRoot;
+  const workspaceId = props.session.workspaceId;
   const request = uploadRequests.begin();
   uploadingAttachments.value = true;
 
@@ -343,8 +343,8 @@ async function uploadLocalFiles(event: Event) {
         size: number;
         mimeType: string | null;
       }>(
-        "/workspace/attachment?root=" +
-          encodeURIComponent(root) +
+        "/workspace/attachment?workspaceId=" +
+          encodeURIComponent(workspaceId) +
           "&sessionId=" +
           encodeURIComponent(sessionId) +
           "&name=" +

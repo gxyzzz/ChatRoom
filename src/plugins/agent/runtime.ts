@@ -180,8 +180,8 @@ export class AgentRuntime {
   }
 
   async createSession(input: CreateAgentSessionInput): Promise<AgentSession> {
-    const workspace = await this.workspaces.info(input.workspaceRoot);
-    const workspaceRoot = workspace.root;
+    const workspace = await this.workspaces.info(input.workspaceId);
+    const workspaceRoot = workspace.path;
     const provider = this.requireProvider(input.provider);
     const providerStatus = await provider.probe();
     if (!providerStatus.installed)
@@ -211,7 +211,8 @@ export class AgentRuntime {
     const now = new Date().toISOString();
     const session: AgentSession = {
       id: "agent_" + randomUUID(),
-      workspaceRoot,
+      workspaceId: workspace.id,
+      workspaceName: workspace.name,
       provider: input.provider,
       ...config,
       tokenUsage: null,
@@ -261,7 +262,12 @@ export class AgentRuntime {
     const text = input.text.trim();
     if (!text && input.attachments.length === 0)
       throw new ChatRoomError("INVALID_INPUT", "Agent message is empty");
-    const attachments = await validateAttachments(session, input.attachments);
+    const workspaceRoot = await this.workspaces.resolve(session.workspaceId);
+    const attachments = await validateAttachments(
+      session,
+      workspaceRoot,
+      input.attachments,
+    );
     await this.validateInputModalities(session, text, attachments);
     const providerSession = await this.providerSession(session);
     const active = this.beginTurn(
@@ -332,7 +338,12 @@ export class AgentRuntime {
       const text = input.text.trim();
       if (!text && input.attachments.length === 0)
         throw new ChatRoomError("INVALID_INPUT", "Agent message is empty");
-      const attachments = await validateAttachments(session, input.attachments);
+      const workspaceRoot = await this.workspaces.resolve(session.workspaceId);
+      const attachments = await validateAttachments(
+        session,
+        workspaceRoot,
+        input.attachments,
+      );
       await this.validateInputModalities(session, text, attachments);
       if (this.activeTurns.get(sessionId) !== active)
         throw new ChatRoomError("CONFLICT", "Agent turn ended before steering");
@@ -770,7 +781,13 @@ export class AgentRuntime {
       await providerSession.close().catch(() => undefined);
       this.providerSessions.delete(sessionId);
     }
-    await cleanupSessionFiles(this.store, history);
+    await cleanupSessionFiles(
+      this.store,
+      history,
+      await this.workspaces
+        .resolve(history.session.workspaceId)
+        .catch(() => null),
+    );
     this.store.deleteSession(sessionId);
     this.invalidateSession(sessionId, { deleted: true });
   }
@@ -800,8 +817,8 @@ export class AgentRuntime {
     if (session.provider === targetProvider)
       return this.configureSessionUnlocked(sessionId, patch);
 
-    const workspace = await this.workspaces.info(session.workspaceRoot);
-    const workspaceRoot = workspace.root;
+    const workspace = await this.workspaces.info(session.workspaceId);
+    const workspaceRoot = workspace.path;
     const provider = this.requireProvider(targetProvider);
     const providerStatus = await provider.probe();
     if (!providerStatus.installed)
@@ -996,7 +1013,10 @@ export class AgentRuntime {
 
     if (event.type === "item.updated") {
       const existing = active.items.get(event.providerItemId);
-      const payload = await prepareProviderItem(session, event.item);
+      const payload = await prepareProviderItem(
+        await this.workspaces.resolve(session.workspaceId),
+        event.item,
+      );
       const updated = materializeProviderItem(
         active.turn.id,
         event.providerItemId,
@@ -1069,7 +1089,10 @@ export class AgentRuntime {
 
     if (event.type === "item.completed") {
       const existing = active.items.get(event.providerItemId);
-      const providerItem = await prepareProviderItem(session, event.item);
+      const providerItem = await prepareProviderItem(
+        await this.workspaces.resolve(session.workspaceId),
+        event.item,
+      );
       const completed = materializeProviderItem(
         active.turn.id,
         event.providerItemId,
@@ -1192,8 +1215,8 @@ export class AgentRuntime {
   private async providerSession(
     session: AgentSession,
   ): Promise<ProviderSession> {
-    const workspace = await this.workspaces.info(session.workspaceRoot);
-    const workspaceRoot = workspace.root;
+    const workspace = await this.workspaces.info(session.workspaceId);
+    const workspaceRoot = workspace.path;
     const existing = this.providerSessions.get(session.id);
     if (existing) return existing;
     const provider = this.requireProvider(session.provider);
@@ -1273,7 +1296,11 @@ export class AgentRuntime {
   async cleanupOrphanAttachments(
     maxAgeMs = 7 * 24 * 60 * 60 * 1000,
   ): Promise<void> {
-    await cleanupOrphanAttachmentFiles(this.store, maxAgeMs);
+    await cleanupOrphanAttachmentFiles(
+      this.store,
+      (workspaceId) => this.workspaces.resolve(workspaceId),
+      maxAgeMs,
+    );
   }
 
   private async withSessionMutation<T>(

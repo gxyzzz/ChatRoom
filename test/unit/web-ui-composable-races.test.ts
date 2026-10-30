@@ -841,7 +841,7 @@ test("Workspace Git blocks refresh during mutations and cancels old-root and dis
     assert.equal(await oldAction, false);
     assert.equal(state.busy.value, null);
     assert.equal(state.status.value, null);
-    assert.equal(http.requests.at(-1)?.url, "/api/git/status?root=B");
+    assert.equal(http.requests.at(-1)?.url, "/api/git/status?workspaceId=B");
     http.requests.at(-1)!.resolve(status);
     await flush();
     await resolveAncillary();

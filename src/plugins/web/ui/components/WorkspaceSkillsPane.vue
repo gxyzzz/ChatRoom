@@ -5,7 +5,7 @@ import { api, type WorkspaceInfo, type WorkspaceSkill } from "../api.js";
 import { errorMessage } from "../utils/errors.js";
 import { createRequestGate } from "../utils/requests.js";
 
-const props = defineProps<{ root: string }>();
+const props = defineProps<{ workspaceId: string }>();
 const info = shallowRef<WorkspaceInfo | null>(null);
 const loading = shallowRef(false);
 const error = shallowRef("");
@@ -13,7 +13,7 @@ const locale = useLocale();
 const loadRequests = createRequestGate();
 
 watch(
-  () => props.root,
+  () => props.workspaceId,
   () => {
     info.value = null;
     void load();
@@ -23,15 +23,16 @@ watch(
 
 async function load() {
   const request = loadRequests.begin();
-  const root = props.root;
+  const workspaceId = props.workspaceId;
   loading.value = true;
   error.value = "";
   try {
     const next = await api<WorkspaceInfo>(
-      `/workspace?root=${encodeURIComponent(root)}`,
+      `/workspace?workspaceId=${encodeURIComponent(workspaceId)}`,
       { signal: request.signal },
     );
-    if (!loadRequests.isCurrent(request) || props.root !== root) return;
+    if (!loadRequests.isCurrent(request) || props.workspaceId !== workspaceId)
+      return;
     info.value = next;
   } catch (cause) {
     if (loadRequests.isCurrent(request)) error.value = errorMessage(cause);

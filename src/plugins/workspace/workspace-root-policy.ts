@@ -9,18 +9,38 @@ export class WorkspaceRootPolicy {
   static async create(allowedRoots: string[]): Promise<WorkspaceRootPolicy> {
     const canonicalRoots = await Promise.all(
       allowedRoots.map(async (root) => {
-        const canonical = await realpath(expandHome(root)).catch(() => {
-          throw new ChatRoomError(
-            "NOT_FOUND",
-            `Allowed root does not exist: ${root}`,
-          );
-        });
-        if (!(await stat(canonical)).isDirectory())
-          throw new ChatRoomError(
-            "INVALID_INPUT",
-            `Allowed root is not a directory: ${root}`,
-          );
-        return canonical;
+        let candidate = expandHome(root);
+        const missing: string[] = [];
+
+        while (true) {
+          let canonical: string;
+          try {
+            canonical = await realpath(candidate);
+          } catch (error) {
+            const code = (error as NodeJS.ErrnoException).code;
+            if (code !== "ENOENT" && code !== "ENOTDIR")
+              throw new ChatRoomError(
+                "NOT_FOUND",
+                "Allowed root cannot be resolved: " + root,
+              );
+            const parent = path.dirname(candidate);
+            if (parent === candidate)
+              throw new ChatRoomError(
+                "NOT_FOUND",
+                "Allowed root cannot be resolved: " + root,
+              );
+            missing.push(path.basename(candidate));
+            candidate = parent;
+            continue;
+          }
+
+          if (!(await stat(canonical)).isDirectory())
+            throw new ChatRoomError(
+              "INVALID_INPUT",
+              "Allowed root is not a directory: " + root,
+            );
+          return path.join(canonical, ...missing.reverse());
+        }
       }),
     );
     return new WorkspaceRootPolicy([...new Set(canonicalRoots)]);
@@ -34,42 +54,24 @@ export class WorkspaceRootPolicy {
     return this.allowedRoots.some((root) => path.dirname(candidate) === root);
   }
 
-  async resolveWorkspace(input: string): Promise<string> {
-    if (typeof input !== "string" || !input.trim())
-      throw new ChatRoomError("INVALID_INPUT", "Workspace root is required");
-    const canonical = await realpath(expandHome(input)).catch(() => {
-      throw new ChatRoomError(
-        "NOT_FOUND",
-        `Workspace root does not exist: ${input}`,
-      );
-    });
-    if (!(await stat(canonical)).isDirectory())
-      throw new ChatRoomError(
-        "INVALID_INPUT",
-        `Workspace root is not a directory: ${input}`,
-      );
-    if (!this.isWorkspaceRoot(canonical))
-      throw new ChatRoomError(
-        "FORBIDDEN",
-        "Workspace must be a direct child of a configured allowed root",
-        { root: canonical },
-      );
-    return canonical;
-  }
-
   async resolveAllowedRoot(input: string): Promise<string> {
     if (typeof input !== "string" || !input.trim())
       throw new ChatRoomError("INVALID_INPUT", "Allowed root is required");
     const canonical = await realpath(expandHome(input)).catch(() => {
       throw new ChatRoomError(
         "NOT_FOUND",
-        `Allowed root does not exist: ${input}`,
+        "Allowed root does not exist: " + input,
       );
     });
     if (!this.allowedRoots.includes(canonical))
       throw new ChatRoomError(
         "FORBIDDEN",
         "Project can only be created directly under a configured allowed root",
+      );
+    if (!(await stat(canonical)).isDirectory())
+      throw new ChatRoomError(
+        "INVALID_INPUT",
+        "Allowed root is not a directory: " + input,
       );
     return canonical;
   }

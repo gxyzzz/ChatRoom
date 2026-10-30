@@ -7,6 +7,10 @@ import { createTestRuntime } from "../helpers/runtime.js";
 test("project files use only internal exclusions outside Git repositories", async () => {
   const runtime = await createTestRuntime();
   try {
+    const workspace = runtime.components.database.raw
+      .prepare("SELECT id FROM workspaces WHERE path=?")
+      .get(runtime.workspaceRoot) as { id: string } | undefined;
+    assert.ok(workspace);
     await mkdir(path.join(runtime.workspaceRoot, ".chatroom"), {
       recursive: true,
     });
@@ -36,7 +40,7 @@ test("project files use only internal exclusions outside Git repositories", asyn
     const address = runtime.components.http.address();
     assert.ok(address);
     const response = await fetch(
-      `http://127.0.0.1:${address.port}/api/workspace/project-files?root=${encodeURIComponent(runtime.workspaceRoot)}`,
+      `http://127.0.0.1:${address.port}/api/workspace/project-files?workspaceId=${encodeURIComponent(workspace.id)}`,
     );
     assert.equal(response.status, 200);
     const result = (await response.json()) as {

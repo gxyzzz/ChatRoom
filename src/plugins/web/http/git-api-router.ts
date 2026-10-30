@@ -14,7 +14,7 @@ export function createGitApiRouter(application: WebRuntime): Router {
   router.get(
     "/git/status",
     asyncRoute(async (req, res) => {
-      const root = await resolveRoot(application, req.query.root);
+      const root = await resolveRoot(application, req.query.workspaceId);
       res.json(await application.git.status(root));
     }),
   );
@@ -22,7 +22,7 @@ export function createGitApiRouter(application: WebRuntime): Router {
   router.get(
     "/git/diff",
     asyncRoute(async (req, res) => {
-      const root = await resolveRoot(application, req.query.root);
+      const root = await resolveRoot(application, req.query.workspaceId);
       const filePath =
         typeof req.query.path === "string" ? req.query.path : undefined;
       res.json(await application.git.diff(root, filePath));
@@ -32,7 +32,7 @@ export function createGitApiRouter(application: WebRuntime): Router {
   router.get(
     "/git/branches",
     asyncRoute(async (req, res) => {
-      const root = await resolveRoot(application, req.query.root);
+      const root = await resolveRoot(application, req.query.workspaceId);
       res.json(await application.git.branches(root));
     }),
   );
@@ -40,7 +40,7 @@ export function createGitApiRouter(application: WebRuntime): Router {
   router.get(
     "/git/log",
     asyncRoute(async (req, res) => {
-      const root = await resolveRoot(application, req.query.root);
+      const root = await resolveRoot(application, req.query.workspaceId);
       const requested = Number(req.query.limit ?? 30);
       const limit = Number.isFinite(requested) ? requested : 30;
       res.json(await application.git.log(root, limit));
@@ -51,7 +51,7 @@ export function createGitApiRouter(application: WebRuntime): Router {
     "/git/stage",
     asyncRoute(async (req, res) => {
       const body = bodyRecord(req.body);
-      const root = await resolveRoot(application, body.root);
+      const root = await resolveRoot(application, body.workspaceId);
       const paths = requireStringArray(body.paths, "paths");
       res.json(
         await mutate(application, "git.stage", root, { paths }, () =>
@@ -65,7 +65,7 @@ export function createGitApiRouter(application: WebRuntime): Router {
     "/git/unstage",
     asyncRoute(async (req, res) => {
       const body = bodyRecord(req.body);
-      const root = await resolveRoot(application, body.root);
+      const root = await resolveRoot(application, body.workspaceId);
       const paths = requireStringArray(body.paths, "paths");
       res.json(
         await mutate(application, "git.unstage", root, { paths }, () =>
@@ -79,7 +79,7 @@ export function createGitApiRouter(application: WebRuntime): Router {
     "/git/restore",
     asyncRoute(async (req, res) => {
       const body = bodyRecord(req.body);
-      const root = await resolveRoot(application, body.root);
+      const root = await resolveRoot(application, body.workspaceId);
       const filePath = requireString(body.path, "path");
       res.json(
         await mutate(application, "git.restore", root, { path: filePath }, () =>
@@ -93,7 +93,7 @@ export function createGitApiRouter(application: WebRuntime): Router {
     "/git/commit",
     asyncRoute(async (req, res) => {
       const body = bodyRecord(req.body);
-      const root = await resolveRoot(application, body.root);
+      const root = await resolveRoot(application, body.workspaceId);
       const message = requireString(body.message, "message");
       res.json(
         await mutate(application, "git.commit", root, { message }, () =>
@@ -107,7 +107,7 @@ export function createGitApiRouter(application: WebRuntime): Router {
     "/git/branches",
     asyncRoute(async (req, res) => {
       const body = bodyRecord(req.body);
-      const root = await resolveRoot(application, body.root);
+      const root = await resolveRoot(application, body.workspaceId);
       const name = requireString(body.name, "name");
       res.json(
         await mutate(application, "git.branch.create", root, { name }, () =>
@@ -121,7 +121,7 @@ export function createGitApiRouter(application: WebRuntime): Router {
     "/git/switch",
     asyncRoute(async (req, res) => {
       const body = bodyRecord(req.body);
-      const root = await resolveRoot(application, body.root);
+      const root = await resolveRoot(application, body.workspaceId);
       const name = requireString(body.name, "name");
       res.json(
         await mutate(application, "git.branch.switch", root, { name }, () =>
@@ -135,7 +135,7 @@ export function createGitApiRouter(application: WebRuntime): Router {
     "/git/branches",
     asyncRoute(async (req, res) => {
       const body = bodyRecord(req.body);
-      const root = await resolveRoot(application, body.root);
+      const root = await resolveRoot(application, body.workspaceId);
       const name = requireString(body.name, "name");
       res.json(
         await mutate(application, "git.branch.delete", root, { name }, () =>
@@ -150,7 +150,7 @@ export function createGitApiRouter(application: WebRuntime): Router {
       `/git/${action}`,
       asyncRoute(async (req, res) => {
         const body = bodyRecord(req.body);
-        const root = await resolveRoot(application, body.root);
+        const root = await resolveRoot(application, body.workspaceId);
         res.json(
           await mutate(application, `git.${action}`, root, {}, () =>
             application.git[action](root),
@@ -167,7 +167,7 @@ async function resolveRoot(
   application: WebRuntime,
   value: unknown,
 ): Promise<string> {
-  return application.workspaces.resolve(requireString(value, "root"));
+  return application.workspaces.resolve(requireString(value, "workspaceId"));
 }
 
 function mutate(

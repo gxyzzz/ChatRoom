@@ -60,6 +60,9 @@ export async function createTestRuntime(
     components,
     cleanup: async () => {
       await components.http.close().catch(() => undefined);
+      await components.agentMcpGateway.close().catch(() => undefined);
+      await components.agentCustomMcp.close().catch(() => undefined);
+      await components.customMcp.close().catch(() => undefined);
       await components.plugins.stop().catch(() => undefined);
       try {
         components.database.close();

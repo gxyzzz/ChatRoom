@@ -16,7 +16,8 @@ import type {
 
 const session: AgentSession = {
   id: "a",
-  workspaceRoot: "/workspace",
+  workspaceId: "workspace-id",
+  workspaceName: "Workspace",
   provider: "codex",
   status: "running",
   attention: null,

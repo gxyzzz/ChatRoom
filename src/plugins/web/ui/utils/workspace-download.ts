@@ -1,9 +1,8 @@
 export function workspaceDownloadUrl(
-  rootOrAlias: string,
+  workspaceId: string,
   path: string,
   landing = false,
 ): string {
-  const workspace = rootOrAlias.split(/[\\/]/).filter(Boolean).pop() ?? "";
-  const params = new URLSearchParams({ workspace, path });
+  const params = new URLSearchParams({ workspaceId, path });
   return `${landing ? "/download" : "/api/workspace/file/download"}?${params}`;
 }

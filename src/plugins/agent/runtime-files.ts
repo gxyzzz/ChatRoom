@@ -19,11 +19,12 @@ export function sessionAttachmentPrefix(sessionId: string): string {
 export async function cleanupSessionFiles(
   store: AgentStore,
   history: AgentHistory,
+  workspaceRoot: string | null,
 ): Promise<void> {
-  const workspaceRoot = history.session.workspaceRoot;
+  if (!workspaceRoot) return;
   const retained = referencedManagedFiles(
     store,
-    workspaceRoot,
+    history.session.workspaceId,
     history.session.id,
   );
   const attachmentPrefix = sessionAttachmentPrefix(history.session.id);
@@ -47,16 +48,19 @@ export async function cleanupSessionFiles(
 
 export async function cleanupOrphanAttachments(
   store: AgentStore,
+  resolveWorkspace: (workspaceId: string) => Promise<string>,
   maxAgeMs: number,
 ): Promise<void> {
   const now = Date.now();
-  const workspaceRoots = new Set(
-    store.listSessions().map((session) => session.workspaceRoot),
+  const workspaceIds = new Set(
+    store.listSessions().map((session) => session.workspaceId),
   );
-  for (const workspaceRoot of workspaceRoots) {
+  for (const workspaceId of workspaceIds) {
+    const workspaceRoot = await resolveWorkspace(workspaceId).catch(() => null);
+    if (!workspaceRoot) continue;
     await removeUnreferencedAttachmentFiles(
       workspaceRoot,
-      referencedManagedFiles(store, workspaceRoot),
+      referencedManagedFiles(store, workspaceId),
       now,
       maxAgeMs,
     );
@@ -64,7 +68,7 @@ export async function cleanupOrphanAttachments(
 }
 
 export async function prepareProviderItem(
-  session: AgentSession,
+  workspaceRoot: string,
   item: ProviderItem,
 ): Promise<ProviderItem> {
   if (item.type !== "artifact") return item;
@@ -75,10 +79,7 @@ export async function prepareProviderItem(
         artifact: {
           ...item.artifact,
           path: (
-            await resolveReadableFileWithin(
-              session.workspaceRoot,
-              item.artifact.path,
-            )
+            await resolveReadableFileWithin(workspaceRoot, item.artifact.path)
           ).relative,
         },
       };
@@ -100,7 +101,7 @@ export async function prepareProviderItem(
     const content = await readFile(item.artifact.path);
     if (content.byteLength > 32 * 1024 * 1024)
       throw new ChatRoomError("INVALID_INPUT", "Agent artifact is too large");
-    await writeBytesAtomicWithin(session.workspaceRoot, target, content);
+    await writeBytesAtomicWithin(workspaceRoot, target, content);
     return {
       ...item,
       artifact: {
@@ -120,12 +121,13 @@ export async function prepareProviderItem(
 
 export async function validateAttachments(
   session: AgentSession,
+  workspaceRoot: string,
   attachments: AgentTurnInput["attachments"],
 ): Promise<AgentTurnInput["attachments"]> {
   return Promise.all(
     attachments.map(async (attachment) => {
       const resolved = await resolveReadableFileWithin(
-        session.workspaceRoot,
+        workspaceRoot,
         attachment.path,
       );
       if (
@@ -146,13 +148,13 @@ export async function validateAttachments(
 
 function referencedManagedFiles(
   store: AgentStore,
-  workspaceRoot: string,
+  workspaceId: string,
   excludedSessionId?: string,
 ): Set<string> {
   const paths = new Set<string>();
   for (const session of store.listSessions()) {
     if (session.id === excludedSessionId) continue;
-    if (session.workspaceRoot !== workspaceRoot) continue;
+    if (session.workspaceId !== workspaceId) continue;
     const history = store.history(session.id);
     if (!history) continue;
     for (const filePath of managedFilesInHistory(history)) paths.add(filePath);
