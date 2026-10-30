@@ -1,6 +1,7 @@
 import type { LogWriter } from "#core/logging/types";
 import { LineProcess } from "#core/runtime/line-process";
 import { CHATROOM_VERSION } from "#core/runtime/identity";
+import { resolveCodexLaunch } from "./launch.js";
 
 export type CodexRequestId = string | number;
 
@@ -117,10 +118,12 @@ export class CodexRpcClient {
   }
 
   private async start(): Promise<InitializeResult> {
+    const launch = resolveCodexLaunch();
     let process: LineProcess;
     process = new LineProcess({
-      command: "codex",
+      command: launch.command,
       args: [
+        ...launch.args,
         "app-server",
         "--listen",
         "stdio://",
