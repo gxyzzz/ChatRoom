@@ -168,8 +168,20 @@ function asRecord(value: unknown): Record<string, unknown> {
 
 <style scoped>
 .computer-operation-scroll {
+  min-height: 0;
+  max-height: min(38vh, 360px);
+  overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+}
+
+@media (max-width: 600px) {
+  .computer-operation-scroll {
+    max-height: min(34vh, 280px);
+  }
 }
 
 .computer-operation-list {

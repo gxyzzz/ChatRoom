@@ -48,6 +48,8 @@ const RESPONSE_HEADERS = new Set([
   "content-range",
   "accept-ranges",
   "cache-control",
+  "content-security-policy",
+  "x-content-type-options",
   "etag",
   "last-modified",
 ]);

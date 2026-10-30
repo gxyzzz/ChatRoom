@@ -7,6 +7,10 @@ import { createTestRuntime } from "../helpers/runtime.js";
 test("workspace image preview uses versioned immutable caching and conditional 304", async () => {
   const runtime = await createTestRuntime();
   try {
+    const workspace = runtime.components.database.raw
+      .prepare("SELECT id FROM workspaces WHERE path=?")
+      .get(runtime.workspaceRoot) as { id: string } | undefined;
+    assert.ok(workspace);
     const imagePath = path.join(runtime.workspaceRoot, "preview.png");
     await writeFile(imagePath, Buffer.from([0x89, 0x50, 0x4e, 0x47]));
     const info = await stat(imagePath);
@@ -16,8 +20,8 @@ test("workspace image preview uses versioned immutable caching and conditional 3
     const address = runtime.components.http.address();
     assert.ok(address);
     const base =
-      `http://127.0.0.1:${address.port}/api/workspace/file/image?root=` +
-      encodeURIComponent(runtime.workspaceRoot) +
+      `http://127.0.0.1:${address.port}/api/workspace/file/image?workspaceId=` +
+      encodeURIComponent(workspace.id) +
       "&path=" +
       encodeURIComponent("preview.png");
 

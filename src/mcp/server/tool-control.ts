@@ -13,6 +13,7 @@ export interface McpToolSummary {
   title: string;
   description: string;
   enabled: boolean;
+  agentAllowed?: boolean;
 }
 
 interface McpToolDefinition {
@@ -21,6 +22,8 @@ interface McpToolDefinition {
   title: string;
   description: string;
   defaultEnabled?: boolean;
+  /** Prevent a gateway from exposing management tools to the agent itself. */
+  agentAllowed?: boolean;
 }
 
 export class McpToolControl {
@@ -29,7 +32,10 @@ export class McpToolControl {
   private readonly definitions = new Map<string, McpToolDefinition>();
   private readonly handles = new Map<string, Set<WeakRef<RegisteredTool>>>();
 
-  constructor(private readonly store: McpToolSettingStore) {
+  constructor(
+    private readonly store: McpToolSettingStore,
+    private readonly defaultEnabled = true,
+  ) {
     for (const name of store.disabledTools()) this.disabled.add(name);
     for (const name of store.configuredTools?.() ?? [])
       this.configured.add(name);
@@ -43,7 +49,9 @@ export class McpToolControl {
       );
     this.definitions.set(definition.name, definition);
     if (
-      definition.defaultEnabled === false &&
+      (definition.defaultEnabled === false ||
+        !this.defaultEnabled ||
+        definition.agentAllowed === false) &&
       !this.configured.has(definition.name)
     )
       this.setEnabled(definition.name, false);
@@ -59,6 +67,10 @@ export class McpToolControl {
 
   isEnabled(name: string): boolean {
     return this.definitions.has(name) && !this.disabled.has(name);
+  }
+
+  definition(name: string): Readonly<McpToolDefinition> | null {
+    return this.definitions.get(name) ?? null;
   }
 
   attach(name: string, tool: RegisteredTool): void {
@@ -91,6 +103,11 @@ export class McpToolControl {
     const definition = this.definitions.get(name);
     if (!definition)
       throw new ChatRoomError("NOT_FOUND", `Unknown MCP tool: ${name}`);
+    if (enabled && definition.agentAllowed === false)
+      throw new ChatRoomError(
+        "FORBIDDEN",
+        `Tool is not available to Agent MCP: ${name}`,
+      );
 
     if (enabled === !this.disabled.has(name)) return { ...definition, enabled };
 

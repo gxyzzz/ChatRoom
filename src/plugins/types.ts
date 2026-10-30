@@ -7,6 +7,7 @@ import type { CustomMcpManager } from "#mcp/custom/manager";
 import type { RuntimeEventBus } from "#app/event-bus";
 import type { ExternalAccessRegistry } from "#app/external-access-registry";
 import type { LogWriter } from "#core/logging/types";
+import type { AgentMcpConnection } from "#plugins/agent/mcp-gateway";
 
 import type { ServiceRegistry } from "#app/service-registry";
 
@@ -16,6 +17,9 @@ export interface PluginContext {
   operations: OperationLog;
   mcpTools: McpToolControl;
   customMcp: CustomMcpManager;
+  agentMcp: AgentMcpConnection;
+  agentMcpTools: import("#mcp/server/tool-control").McpToolControl;
+  agentCustomMcp: CustomMcpManager;
   events: RuntimeEventBus;
   externalAccess: ExternalAccessRegistry;
   services: ServiceRegistry;

@@ -24,6 +24,103 @@ export function createWorkspaceApiRouter(application: WebRuntime): Router {
     }),
   );
 
+  router.get(
+    "/workspaces/manage",
+    asyncRoute(async (_req, res) => {
+      res.json(await application.workspaces.listAll());
+    }),
+  );
+
+  router.post(
+    "/workspaces/register",
+    asyncRoute(async (req, res) => {
+      const body = bodyRecord(req.body);
+      const projectPath = requireString(body.path, "path");
+      const name =
+        body.name === undefined || body.name === null
+          ? null
+          : requireString(body.name, "name");
+      res.json(
+        await application.operations.run(
+          {
+            pluginId: "workspace",
+            source: "gui",
+            action: "register",
+            input: { path: projectPath, name },
+          },
+          () => application.workspaces.registerProject(projectPath, name),
+        ),
+      );
+    }),
+  );
+
+  router.patch(
+    "/workspaces/:workspaceId",
+    asyncRoute(async (req, res) => {
+      const body = bodyRecord(req.body);
+      res.json(
+        await application.workspaces.renameProject(
+          requireString(req.params.workspaceId, "workspaceId"),
+          requireString(body.name, "name"),
+        ),
+      );
+    }),
+  );
+
+  router.delete(
+    "/workspaces/:workspaceId/cleanup",
+    asyncRoute(async (req, res) => {
+      const workspaceId = requireString(req.params.workspaceId, "workspaceId");
+      const project = (await application.workspaces.listAll()).find(
+        (item) => item.id === workspaceId,
+      );
+      if (!project) throw new ChatRoomError("NOT_FOUND", "Workspace not found");
+      if (project.status === "available")
+        throw new ChatRoomError(
+          "CONFLICT",
+          "Available workspaces cannot be cleaned up",
+        );
+      const sessions = application.agents
+        .listSessions()
+        .filter((session) => session.workspaceId === workspaceId);
+      if (
+        sessions.some(
+          (session) =>
+            session.status === "running" || session.status === "waiting_input",
+        )
+      )
+        throw new ChatRoomError(
+          "CONFLICT",
+          "Stop active Agent sessions before cleaning up this workspace",
+        );
+      for (const session of sessions)
+        await application.agents.deleteSession(session.id);
+      await application.workspaces.cleanupProject(workspaceId);
+      res.status(204).end();
+    }),
+  );
+
+  router.delete(
+    "/workspaces/:workspaceId",
+    asyncRoute(async (req, res) => {
+      await application.workspaces.removeProject(
+        requireString(req.params.workspaceId, "workspaceId"),
+      );
+      res.status(204).end();
+    }),
+  );
+
+  router.post(
+    "/workspaces/:workspaceId/restore",
+    asyncRoute(async (req, res) => {
+      res.json(
+        await application.workspaces.restoreProject(
+          requireString(req.params.workspaceId, "workspaceId"),
+        ),
+      );
+    }),
+  );
+
   router.post(
     "/workspaces",
     asyncRoute(async (req, res) => {
@@ -53,7 +150,7 @@ export function createWorkspaceApiRouter(application: WebRuntime): Router {
     asyncRoute(async (req, res) => {
       res.json(
         await application.workspaces.info(
-          requireString(req.query.root, "root"),
+          requireString(req.query.workspaceId, "workspaceId"),
         ),
       );
     }),
@@ -63,7 +160,7 @@ export function createWorkspaceApiRouter(application: WebRuntime): Router {
     "/workspace/files",
     asyncRoute(async (req, res) => {
       const fs = await application.workspaces.fs(
-        requireString(req.query.root, "root"),
+        requireString(req.query.workspaceId, "workspaceId"),
       );
       const filePath =
         typeof req.query.path === "string" ? req.query.path : ".";
@@ -87,7 +184,7 @@ export function createWorkspaceApiRouter(application: WebRuntime): Router {
     asyncRoute(async (req, res) => {
       res.json(
         await application.workspaces.projectFilesResult(
-          requireString(req.query.root, "root"),
+          requireString(req.query.workspaceId, "workspaceId"),
         ),
       );
     }),
@@ -109,9 +206,8 @@ export function createWorkspaceApiRouter(application: WebRuntime): Router {
     "/workspace/file",
     asyncRoute(async (req, res) => {
       const body = bodyRecord(req.body);
-      const fs = await application.workspaces.fs(
-        requireString(body.root, "root"),
-      );
+      const workspaceId = requireString(body.workspaceId, "workspaceId");
+      const fs = await application.workspaces.fs(workspaceId);
       const filePath = requireString(body.path, "path");
       if (typeof body.content !== "string")
         throw new ChatRoomError("INVALID_INPUT", "content must be a string");
@@ -127,7 +223,7 @@ export function createWorkspaceApiRouter(application: WebRuntime): Router {
             pluginId: "workspace",
             source: "gui",
             action: "file.write",
-            input: { root: fs.root, path: filePath, bytes },
+            input: { workspaceId, path: filePath, bytes },
           },
           () => fs.write(filePath, body.content as string),
         ),
@@ -142,7 +238,7 @@ export function createWorkspaceApiRouter(application: WebRuntime): Router {
       limit: MAX_ATTACHMENT_BYTES,
     }),
     asyncRoute(async (req, res) => {
-      const root = requireString(req.query.root, "root");
+      const workspaceId = requireString(req.query.workspaceId, "workspaceId");
       const sessionId = requireString(req.query.sessionId, "sessionId");
       if (!/^[A-Za-z0-9_-]+$/.test(sessionId))
         throw new ChatRoomError(
@@ -165,9 +261,9 @@ export function createWorkspaceApiRouter(application: WebRuntime): Router {
           Number(expectedSize) !== req.body.byteLength)
       )
         throw new ChatRoomError("INVALID_INPUT", "Attachment size mismatch");
-      const fs = await application.workspaces.fs(root);
+      const fs = await application.workspaces.fs(workspaceId);
       const session = application.agents.getSession(sessionId);
-      if (session.workspaceRoot !== fs.root)
+      if (session.workspaceId !== workspaceId)
         throw new ChatRoomError(
           "FORBIDDEN",
           "Agent session belongs to another workspace",
@@ -184,7 +280,7 @@ export function createWorkspaceApiRouter(application: WebRuntime): Router {
           pluginId: "workspace",
           source: "gui",
           action: "attachment.upload",
-          input: { root: fs.root, path: filePath, bytes: req.body.byteLength },
+          input: { workspaceId, path: filePath, bytes: req.body.byteLength },
         },
         () => fs.writeBytes(filePath, req.body),
       );
@@ -289,11 +385,9 @@ export function createWorkspaceApiRouter(application: WebRuntime): Router {
 }
 
 function requestWorkspaceFs(req: Request, application: WebRuntime) {
-  if (req.query.workspace !== undefined)
-    return application.workspaces.fsByAlias(
-      requireString(req.query.workspace, "workspace"),
-    );
-  return application.workspaces.fs(requireString(req.query.root, "root"));
+  return application.workspaces.fs(
+    requireString(req.query.workspaceId, "workspaceId"),
+  );
 }
 
 function imageMime(filePath: string): string | null {

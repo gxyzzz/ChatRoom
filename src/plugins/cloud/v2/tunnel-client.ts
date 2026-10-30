@@ -39,7 +39,6 @@ interface HttpStream {
   pendingCredit: number;
   drainArmed: boolean;
   requestBytes: number;
-  responseBytes: number;
   requestEnded: boolean;
   responseEnded: boolean;
 }
@@ -248,6 +247,7 @@ export class V2TunnelClient {
               state.responseEnded = true;
               this.finishIfIdle(frame.id);
             },
+            () => (this.socket?.bufferedAmount ?? 0) < 1024 * 1024,
           );
           state.sender = sender;
           this.send(
@@ -257,11 +257,6 @@ export class V2TunnelClient {
             }),
           );
           response.on("data", (chunk: Buffer) => {
-            state.responseBytes += chunk.length;
-            if (state.responseBytes > 128 * 1024 * 1024) {
-              this.abort(frame.id);
-              return;
-            }
             try {
               sender.enqueue(chunk);
             } catch {
@@ -283,7 +278,6 @@ export class V2TunnelClient {
         pendingCredit: 0,
         drainArmed: false,
         requestBytes: 0,
-        responseBytes: 0,
         requestEnded: false,
         responseEnded: false,
       };

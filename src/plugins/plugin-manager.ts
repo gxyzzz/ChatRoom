@@ -56,7 +56,29 @@ export class PluginManager {
     }
   }
 
-  registerMcp(server: McpServer): void {
+  defineMcp(
+    toolControl: import("#mcp/server/tool-control").McpToolControl,
+    options: { agentMode?: boolean } = {},
+  ): void {
+    for (const plugin of this.active) {
+      if (!plugin.registerMcp) continue;
+      plugin.registerMcp(
+        new PluginMcpRegistrar(
+          null,
+          this.context.operations,
+          plugin.id,
+          toolControl,
+          options,
+        ),
+      );
+    }
+  }
+
+  registerMcp(
+    server: McpServer,
+    toolControl = this.context.mcpTools,
+    options: { agentMode?: boolean } = {},
+  ): void {
     for (const plugin of this.active) {
       if (!plugin.registerMcp) continue;
       plugin.registerMcp(
@@ -64,7 +86,8 @@ export class PluginManager {
           server,
           this.context.operations,
           plugin.id,
-          this.context.mcpTools,
+          toolControl,
+          options,
         ),
       );
     }

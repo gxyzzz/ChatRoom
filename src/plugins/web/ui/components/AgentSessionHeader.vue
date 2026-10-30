@@ -45,7 +45,7 @@ const locale = useLocale();
         <span class="agent-session-model-label">· {{ modelName }}</span>
       </div>
       <div class="panel-subtitle text-truncate">
-        {{ session.workspaceRoot }}
+        {{ session.workspaceName }}
       </div>
       <div v-if="usage" class="agent-session-token-usage">
         {{ usage }}

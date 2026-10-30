@@ -6,9 +6,9 @@ import { useWorkspaceGit } from "../composables/useWorkspaceGit.js";
 import { appIntlLocale } from "../locales.js";
 import GitDiffViewer from "./GitDiffViewer.vue";
 
-const props = defineProps<{ root: string }>();
+const props = defineProps<{ workspaceId: string }>();
 const locale = useLocale();
-const git = useWorkspaceGit(() => props.root);
+const git = useWorkspaceGit(() => props.workspaceId);
 const {
   status,
   branches,
@@ -45,7 +45,7 @@ const restoreTarget = shallowRef<GitChange | null>(null);
 const deleteBranchTarget = shallowRef<GitBranch | null>(null);
 
 watch(
-  () => props.root,
+  () => props.workspaceId,
   () => {
     commitMessage.value = "";
     branchDialog.value = false;

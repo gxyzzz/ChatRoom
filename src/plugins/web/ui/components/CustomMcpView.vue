@@ -70,6 +70,9 @@ function add() {
   editing.value = null;
   dialog.value = true;
 }
+
+defineExpose({ openAdd: add });
+
 function edit(server: CustomMcpServerSummary) {
   editing.value = server;
   dialog.value = true;
@@ -179,24 +182,17 @@ async function toggleTool(
       density="compact"
       >{{ error || authError }}</v-alert
     >
-    <div class="d-flex align-center justify-end ga-2">
-      <div class="d-flex align-center ga-1">
-        <v-btn
-          icon="$mdiRefresh"
-          size="small"
-          variant="text"
-          :loading="loading"
-          :aria-label="t('refresh')"
-          @click="load"
-        />
-        <v-btn
-          color="primary"
-          prepend-icon="$mdiPlus"
-          size="small"
-          @click="add"
-          >{{ t("add") }}</v-btn
-        >
-      </div>
+    <div class="custom-mcp-toolbar">
+      <div class="custom-mcp-section-title">{{ t("custom") }}</div>
+      <v-btn
+        icon="$mdiRefresh"
+        size="small"
+        variant="text"
+        :loading="loading"
+        :aria-label="t('refresh')"
+        :title="t('refresh')"
+        @click="load"
+      />
     </div>
     <v-progress-linear v-if="loading && !servers.length" indeterminate />
     <v-card v-if="!loading && !servers.length" class="panel-card">
@@ -373,7 +369,18 @@ async function toggleTool(
 <style scoped>
 .custom-mcp-view {
   display: grid;
-  gap: 14px;
+  gap: 10px;
+}
+.custom-mcp-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 36px;
+}
+.custom-mcp-section-title {
+  font-size: 0.92rem;
+  font-weight: 650;
 }
 .custom-mcp-header,
 .custom-mcp-tool-row {

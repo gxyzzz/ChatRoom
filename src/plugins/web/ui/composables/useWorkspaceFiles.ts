@@ -22,7 +22,7 @@ export type WorkspaceFilePreview =
 
 const PAGE_SIZE = 300;
 
-export function useWorkspaceFiles(root: WatchSource<string>) {
+export function useWorkspaceFiles(workspaceId: WatchSource<string>) {
   const files = shallowRef<WorkspaceFile[]>([]);
   const currentPath = shallowRef(".");
   const file = shallowRef<WorkspaceFilePreview | null>(null);
@@ -35,8 +35,10 @@ export function useWorkspaceFiles(root: WatchSource<string>) {
   const directoryRequests = createRequestGate();
   const previewRequests = createRequestGate();
 
-  const currentRoot = () =>
-    typeof root === "function" ? root() : String(root.value ?? "");
+  const currentWorkspaceId = () =>
+    typeof workspaceId === "function"
+      ? workspaceId()
+      : String(workspaceId.value ?? "");
 
   const entries = computed(() =>
     [...files.value].sort((a, b) => {
@@ -65,7 +67,7 @@ export function useWorkspaceFiles(root: WatchSource<string>) {
   });
 
   watch(
-    root,
+    workspaceId,
     () => {
       directoryRequests.invalidate();
       previewRequests.invalidate();
@@ -88,7 +90,7 @@ export function useWorkspaceFiles(root: WatchSource<string>) {
       return;
 
     const request = directoryRequests.begin();
-    const targetRoot = currentRoot();
+    const targetWorkspaceId = currentWorkspaceId();
     const path = currentPath.value;
     const offset = append ? (nextOffset.value ?? 0) : 0;
     if (append) loadingMore.value = true;
@@ -97,8 +99,8 @@ export function useWorkspaceFiles(root: WatchSource<string>) {
 
     try {
       const page = await api<WorkspaceFilePage>(
-        "/workspace/files?root=" +
-          encodeURIComponent(targetRoot) +
+        "/workspace/files?workspaceId=" +
+          encodeURIComponent(targetWorkspaceId) +
           "&path=" +
           encodeURIComponent(path) +
           "&limit=" +
@@ -109,7 +111,7 @@ export function useWorkspaceFiles(root: WatchSource<string>) {
       );
       if (
         !directoryRequests.isCurrent(request) ||
-        currentRoot() !== targetRoot ||
+        currentWorkspaceId() !== targetWorkspaceId ||
         currentPath.value !== path
       )
         return;
@@ -132,7 +134,7 @@ export function useWorkspaceFiles(root: WatchSource<string>) {
           file.value = {
             kind: "image",
             path: refreshed.path,
-            url: imageUrl(targetRoot, refreshed),
+            url: imageUrl(targetWorkspaceId, refreshed),
           };
         } else {
           file.value = null;
@@ -162,7 +164,7 @@ export function useWorkspaceFiles(root: WatchSource<string>) {
   }
 
   async function openEntry(entry: WorkspaceFile) {
-    const targetRoot = currentRoot();
+    const targetWorkspaceId = currentWorkspaceId();
     if (entry.type === "directory") {
       await navigate(entry.path);
       return;
@@ -181,7 +183,7 @@ export function useWorkspaceFiles(root: WatchSource<string>) {
       file.value = {
         kind,
         path: entry.path,
-        url: imageUrl(targetRoot, entry),
+        url: imageUrl(targetWorkspaceId, entry),
       };
       return;
     }
@@ -189,7 +191,7 @@ export function useWorkspaceFiles(root: WatchSource<string>) {
       file.value = {
         kind,
         path: entry.path,
-        url: previewUrl(targetRoot, entry),
+        url: previewUrl(targetWorkspaceId, entry),
       };
       return;
     }
@@ -203,15 +205,15 @@ export function useWorkspaceFiles(root: WatchSource<string>) {
     error.value = "";
     try {
       const result = await api<WorkspaceFileContent>(
-        "/workspace/file?root=" +
-          encodeURIComponent(targetRoot) +
+        "/workspace/file?workspaceId=" +
+          encodeURIComponent(targetWorkspaceId) +
           "&path=" +
           encodeURIComponent(entry.path),
         { signal: request.signal },
       );
       if (
         !previewRequests.isCurrent(request) ||
-        currentRoot() !== targetRoot ||
+        currentWorkspaceId() !== targetWorkspaceId ||
         currentPath.value !== parentDirectory(entry.path)
       )
         return;
@@ -264,10 +266,10 @@ function parentDirectory(filePath: string): string {
   return parts.join("/") || ".";
 }
 
-function imageUrl(root: string, entry: WorkspaceFile): string {
+function imageUrl(workspaceId: string, entry: WorkspaceFile): string {
   const base =
-    "/api/workspace/file/image?root=" +
-    encodeURIComponent(root) +
+    "/api/workspace/file/image?workspaceId=" +
+    encodeURIComponent(workspaceId) +
     "&path=" +
     encodeURIComponent(entry.path);
   return entry.modifiedAt
@@ -313,10 +315,10 @@ function mediaKind(path: string): "pdf" | "video" | "audio" | null {
   return null;
 }
 
-function previewUrl(root: string, entry: WorkspaceFile): string {
+function previewUrl(workspaceId: string, entry: WorkspaceFile): string {
   const base =
-    "/api/workspace/file/preview?root=" +
-    encodeURIComponent(root) +
+    "/api/workspace/file/preview?workspaceId=" +
+    encodeURIComponent(workspaceId) +
     "&path=" +
     encodeURIComponent(entry.path);
   return entry.modifiedAt

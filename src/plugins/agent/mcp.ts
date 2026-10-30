@@ -110,7 +110,8 @@ const capabilities = z
 
 const session = z.object({
   id: z.string(),
-  workspaceRoot: z.string(),
+  workspaceId: z.string(),
+  workspaceName: z.string(),
   provider,
   ...settings,
   tokenUsage: tokenUsage.nullable(),
@@ -446,7 +447,7 @@ export function registerAgentTools(
       description:
         "Create an Agent session for a ChatRoom workspace using a registered provider. Choose settings from agent_models and agent_providers capabilities; omitted or null settings use provider/model defaults.",
       inputSchema: z.object({
-        workspaceRoot: z.string().min(1),
+        workspaceId: z.string().min(1),
         provider,
         model: settings.model.default(null),
         reasoningEffort: settings.reasoningEffort.default(null),

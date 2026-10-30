@@ -38,6 +38,10 @@ test("MCP workspace_file_get returns chunked text, binary and Web links without 
     },
   });
   try {
+    const workspace = runtime.components.database.raw
+      .prepare("SELECT id FROM workspaces WHERE path=?")
+      .get(runtime.workspaceRoot) as { id: string } | undefined;
+    assert.ok(workspace);
     const data = "sensitive-content-5798你好abc";
     await writeFile(path.join(runtime.workspaceRoot, "text.txt"), data);
     const binary = Buffer.from([0xff, 0x00, 0x81, 0x23]);
@@ -47,7 +51,7 @@ test("MCP workspace_file_get returns chunked text, binary and Web links without 
     assert.ok(address);
 
     const first = await getFile(address.port, {
-      root: runtime.workspaceRoot,
+      workspaceId: workspace.id,
       path: "text.txt",
       maxBytes: 23,
     });
@@ -56,7 +60,7 @@ test("MCP workspace_file_get returns chunked text, binary and Web links without 
     assert.equal(first.structuredContent?.nextOffset, 22);
 
     const rest = await getFile(address.port, {
-      root: runtime.workspaceRoot,
+      workspaceId: workspace.id,
       path: "text.txt",
       offset: 22,
     });
@@ -64,7 +68,7 @@ test("MCP workspace_file_get returns chunked text, binary and Web links without 
     assert.equal(rest.structuredContent?.nextOffset, null);
 
     const asBase64 = await getFile(address.port, {
-      root: runtime.workspaceRoot,
+      workspaceId: workspace.id,
       path: "binary.dat",
       encoding: "base64",
     });
@@ -74,7 +78,7 @@ test("MCP workspace_file_get returns chunked text, binary and Web links without 
     );
 
     const link = await getFile(address.port, {
-      root: runtime.workspaceRoot,
+      workspaceId: workspace.id,
       path: "text.txt",
       mode: "link",
     });
@@ -82,10 +86,7 @@ test("MCP workspace_file_get returns chunked text, binary and Web links without 
     assert.equal(uri.origin, "https://files.example.com");
     assert.equal(uri.pathname, "/download");
     assert.equal(uri.searchParams.get("path"), "text.txt");
-    assert.equal(
-      uri.searchParams.get("workspace"),
-      path.basename(runtime.workspaceRoot),
-    );
+    assert.equal(uri.searchParams.get("workspaceId"), workspace.id);
     assert.equal(uri.searchParams.has("root"), false);
     assert.equal(uri.toString().includes(runtime.workspaceRoot), false);
 
@@ -102,12 +103,16 @@ test("MCP workspace_file_get returns chunked text, binary and Web links without 
 test("MCP file link returns an error if Web has no public address", async () => {
   const runtime = await createTestRuntime();
   try {
+    const workspace = runtime.components.database.raw
+      .prepare("SELECT id FROM workspaces WHERE path=?")
+      .get(runtime.workspaceRoot) as { id: string } | undefined;
+    assert.ok(workspace);
     await writeFile(path.join(runtime.workspaceRoot, "file.txt"), "abc");
     await runtime.components.http.start();
     const address = runtime.components.http.address();
     assert.ok(address);
     const result = await getFile(address.port, {
-      root: runtime.workspaceRoot,
+      workspaceId: workspace.id,
       path: "file.txt",
       mode: "link",
     });

@@ -1,3 +1,4 @@
+import path from "node:path";
 import type { AgentStore } from "./store.js";
 import type {
   AgentHistory,
@@ -12,7 +13,9 @@ import type { AppDatabase } from "#infrastructure/database/app-database";
 interface SessionRow {
   token_usage_json: string | null;
   id: string;
-  workspace_root: string;
+  workspace_id: string;
+  workspace_name: string | null;
+  workspace_path: string | null;
   provider: AgentSession["provider"];
   model: string | null;
   reasoning_effort: string | null;
@@ -117,11 +120,11 @@ export class AgentRepository implements AgentStore {
   insertSession(session: AgentSession): void {
     this.database.raw
       .prepare(
-        "INSERT INTO agent_sessions(id, workspace_root, provider, status, created_at, updated_at) VALUES(?,?,?,?,?,?)",
+        "INSERT INTO agent_sessions(id, workspace_id, provider, status, created_at, updated_at) VALUES(?,?,?,?,?,?)",
       )
       .run(
         session.id,
-        session.workspaceRoot,
+        session.workspaceId,
         session.provider,
         session.status,
         session.createdAt,
@@ -132,10 +135,10 @@ export class AgentRepository implements AgentStore {
   updateSession(session: AgentSession): void {
     this.database.raw
       .prepare(
-        "UPDATE agent_sessions SET workspace_root=?, provider=?, status=?, created_at=?, updated_at=? WHERE id=?",
+        "UPDATE agent_sessions SET workspace_id=?, provider=?, status=?, created_at=?, updated_at=? WHERE id=?",
       )
       .run(
-        session.workspaceRoot,
+        session.workspaceId,
         session.provider,
         session.status,
         session.createdAt,
@@ -147,7 +150,7 @@ export class AgentRepository implements AgentStore {
   getSession(id: string): AgentSession | null {
     const row = this.database.raw
       .prepare(
-        "SELECT s.*, p.model AS model, p.reasoning_effort, p.reasoning_summary, p.service_tier, p.approval_policy_json, p.approvals_reviewer, p.permission_mode, p.token_usage_json, CASE WHEN EXISTS (SELECT 1 FROM agent_items ai JOIN agent_turns at ON at.id=ai.turn_id WHERE at.session_id=s.id AND ai.type='interaction' AND ai.status='waiting' AND json_extract(ai.payload_json,'$.interaction.kind')='approval') THEN 'approval' WHEN EXISTS (SELECT 1 FROM agent_items ai JOIN agent_turns at ON at.id=ai.turn_id WHERE at.session_id=s.id AND ai.type='interaction' AND ai.status='waiting') THEN 'input' ELSE NULL END AS attention_kind, (SELECT COUNT(*) FROM agent_items ai JOIN agent_turns at ON at.id=ai.turn_id WHERE at.session_id=s.id AND ai.type='interaction' AND ai.status='waiting') AS attention_count FROM agent_sessions s LEFT JOIN agent_session_providers p ON p.session_id=s.id AND p.provider=s.provider WHERE s.id=?",
+        "SELECT s.*, w.name_override AS workspace_name, w.path AS workspace_path, p.model AS model, p.reasoning_effort, p.reasoning_summary, p.service_tier, p.approval_policy_json, p.approvals_reviewer, p.permission_mode, p.token_usage_json, CASE WHEN EXISTS (SELECT 1 FROM agent_items ai JOIN agent_turns at ON at.id=ai.turn_id WHERE at.session_id=s.id AND ai.type='interaction' AND ai.status='waiting' AND json_extract(ai.payload_json,'$.interaction.kind')='approval') THEN 'approval' WHEN EXISTS (SELECT 1 FROM agent_items ai JOIN agent_turns at ON at.id=ai.turn_id WHERE at.session_id=s.id AND ai.type='interaction' AND ai.status='waiting') THEN 'input' ELSE NULL END AS attention_kind, (SELECT COUNT(*) FROM agent_items ai JOIN agent_turns at ON at.id=ai.turn_id WHERE at.session_id=s.id AND ai.type='interaction' AND ai.status='waiting') AS attention_count FROM agent_sessions s LEFT JOIN workspaces w ON w.id=s.workspace_id LEFT JOIN agent_session_providers p ON p.session_id=s.id AND p.provider=s.provider WHERE s.id=?",
       )
       .get(id) as SessionRow | undefined;
     return row ? sessionFromRow(row) : null;
@@ -157,7 +160,7 @@ export class AgentRepository implements AgentStore {
     return (
       this.database.raw
         .prepare(
-          "SELECT s.*, p.model AS model, p.reasoning_effort, p.reasoning_summary, p.service_tier, p.approval_policy_json, p.approvals_reviewer, p.permission_mode, p.token_usage_json, CASE WHEN EXISTS (SELECT 1 FROM agent_items ai JOIN agent_turns at ON at.id=ai.turn_id WHERE at.session_id=s.id AND ai.type='interaction' AND ai.status='waiting' AND json_extract(ai.payload_json,'$.interaction.kind')='approval') THEN 'approval' WHEN EXISTS (SELECT 1 FROM agent_items ai JOIN agent_turns at ON at.id=ai.turn_id WHERE at.session_id=s.id AND ai.type='interaction' AND ai.status='waiting') THEN 'input' ELSE NULL END AS attention_kind, (SELECT COUNT(*) FROM agent_items ai JOIN agent_turns at ON at.id=ai.turn_id WHERE at.session_id=s.id AND ai.type='interaction' AND ai.status='waiting') AS attention_count FROM agent_sessions s LEFT JOIN agent_session_providers p ON p.session_id=s.id AND p.provider=s.provider ORDER BY s.updated_at DESC",
+          "SELECT s.*, w.name_override AS workspace_name, w.path AS workspace_path, p.model AS model, p.reasoning_effort, p.reasoning_summary, p.service_tier, p.approval_policy_json, p.approvals_reviewer, p.permission_mode, p.token_usage_json, CASE WHEN EXISTS (SELECT 1 FROM agent_items ai JOIN agent_turns at ON at.id=ai.turn_id WHERE at.session_id=s.id AND ai.type='interaction' AND ai.status='waiting' AND json_extract(ai.payload_json,'$.interaction.kind')='approval') THEN 'approval' WHEN EXISTS (SELECT 1 FROM agent_items ai JOIN agent_turns at ON at.id=ai.turn_id WHERE at.session_id=s.id AND ai.type='interaction' AND ai.status='waiting') THEN 'input' ELSE NULL END AS attention_kind, (SELECT COUNT(*) FROM agent_items ai JOIN agent_turns at ON at.id=ai.turn_id WHERE at.session_id=s.id AND ai.type='interaction' AND ai.status='waiting') AS attention_count FROM agent_sessions s LEFT JOIN workspaces w ON w.id=s.workspace_id LEFT JOIN agent_session_providers p ON p.session_id=s.id AND p.provider=s.provider ORDER BY s.updated_at DESC",
         )
         .all() as unknown as SessionRow[]
     ).map(sessionFromRow);
@@ -367,7 +370,10 @@ function selectByIds<Row>(
 function sessionFromRow(row: SessionRow): AgentSession {
   return {
     id: row.id,
-    workspaceRoot: row.workspace_root,
+    workspaceId: row.workspace_id,
+    workspaceName:
+      row.workspace_name ??
+      (row.workspace_path ? path.basename(row.workspace_path) : ""),
     tokenUsage: parseJson(row.token_usage_json) as AgentSession["tokenUsage"],
     provider: row.provider,
     model: row.model,

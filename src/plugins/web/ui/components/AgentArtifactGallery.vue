@@ -8,7 +8,7 @@ type ImageArtifactItem = Extract<AgentItem, { type: "artifact" }>;
 
 const props = defineProps<{
   items: ImageArtifactItem[];
-  workspaceRoot: string;
+  workspaceId: string;
 }>();
 
 const locale = useLocale();
@@ -18,14 +18,14 @@ const retries = ref<Record<string, string>>({});
 const preview = shallowRef<ImageArtifactItem | null>(null);
 
 function stateKey(item: ImageArtifactItem): string {
-  return `${props.workspaceRoot}:${item.artifact.path}:${item.id}:${item.updatedAt}:${retries.value[item.id] ?? ""}`;
+  return `${props.workspaceId}:${item.artifact.path}:${item.id}:${item.updatedAt}:${retries.value[item.id] ?? ""}`;
 }
 
 function endpoint(item: ImageArtifactItem): string {
   const version = `${item.id}:${item.updatedAt}`;
   return (
-    "/api/workspace/file/image?root=" +
-    encodeURIComponent(props.workspaceRoot) +
+    "/api/workspace/file/image?workspaceId=" +
+    encodeURIComponent(props.workspaceId) +
     "&path=" +
     encodeURIComponent(item.artifact.path) +
     "&v=" +

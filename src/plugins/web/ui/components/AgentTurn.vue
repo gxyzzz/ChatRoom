@@ -33,7 +33,7 @@ type TurnRenderItem =
 
 const props = defineProps<{
   entry: TurnEntry;
-  workspaceRoot: string;
+  workspaceId: string;
   providerNames: Readonly<Record<string, string>>;
   providerIcons: Readonly<Record<string, string | null>>;
 }>();
@@ -236,7 +236,7 @@ function formatTurnError(): string | null {
       <AgentArtifactGallery
         v-else-if="item.type === 'image_gallery'"
         :items="item.items"
-        :workspace-root="workspaceRoot"
+        :workspace-id="workspaceId"
       />
 
       <details

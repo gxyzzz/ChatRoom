@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { onMounted, shallowRef, watch } from "vue";
+import { computed, onMounted, shallowRef, watch } from "vue";
 import { useLocale } from "vuetify";
 import { api, type WorkspaceEntry } from "../api.js";
 import { errorMessage } from "../utils/errors.js";
 import { createRequestGate } from "../utils/requests.js";
 import WorkspaceCreateDialog from "./WorkspaceCreateDialog.vue";
+import WorkspaceManageDialog from "./WorkspaceManageDialog.vue";
 import WorkspaceFilesPane from "./WorkspaceFilesPane.vue";
 import WorkspaceGitPane from "./WorkspaceGitPane.vue";
 import WorkspacePromptPane from "./WorkspacePromptPane.vue";
@@ -12,22 +13,27 @@ import WorkspaceSkillsPane from "./WorkspaceSkillsPane.vue";
 
 const items = shallowRef<WorkspaceEntry[]>([]);
 const allowedRoots = shallowRef<string[]>([]);
-const selectedRoot = shallowRef<string | null>(
-  window.localStorage.getItem("chatroom.workspace.root"),
+const selectedWorkspaceId = shallowRef<string | null>(
+  window.localStorage.getItem("chatroom.workspace.id"),
+);
+const selectedWorkspace = computed(
+  () =>
+    items.value.find((item) => item.id === selectedWorkspaceId.value) ?? null,
 );
 const tab = shallowRef("git");
 const loading = shallowRef(false);
 const error = shallowRef("");
 const createOpen = shallowRef(false);
+const manageOpen = shallowRef(false);
 const creating = shallowRef(false);
 const createError = shallowRef("");
 const locale = useLocale();
 const loadRequests = createRequestGate();
 
 onMounted(() => void load());
-watch(selectedRoot, (root) => {
-  if (root) window.localStorage.setItem("chatroom.workspace.root", root);
-  else window.localStorage.removeItem("chatroom.workspace.root");
+watch(selectedWorkspaceId, (id) => {
+  if (id) window.localStorage.setItem("chatroom.workspace.id", id);
+  else window.localStorage.removeItem("chatroom.workspace.id");
 });
 
 async function load() {
@@ -42,8 +48,8 @@ async function load() {
     if (!loadRequests.isCurrent(request)) return;
     items.value = workspaces;
     allowedRoots.value = roots;
-    if (!items.value.some((item) => item.root === selectedRoot.value))
-      selectedRoot.value = items.value[0]?.root ?? null;
+    if (!items.value.some((item) => item.id === selectedWorkspaceId.value))
+      selectedWorkspaceId.value = items.value[0]?.id ?? null;
   } catch (cause) {
     if (loadRequests.isCurrent(request)) error.value = errorMessage(cause);
   } finally {
@@ -61,7 +67,7 @@ async function createProject(parent: string, name: string) {
       body: JSON.stringify({ parent, name }),
     });
     await load();
-    selectedRoot.value = created.root;
+    selectedWorkspaceId.value = created.id;
     createOpen.value = false;
   } catch (cause) {
     createError.value = errorMessage(cause);
@@ -77,9 +83,13 @@ async function createProject(parent: string, name: string) {
       <div class="workspace-header">
         <div class="workspace-identity min-w-0">
           <v-select
-            v-model="selectedRoot"
+            v-model="selectedWorkspaceId"
             :items="
-              items.map((item) => ({ title: item.name, value: item.root }))
+              items.map((item) => ({
+                title: item.name,
+                value: item.id,
+                subtitle: item.path,
+              }))
             "
             :loading="loading"
             :aria-label="locale.t('$vuetify.chatroom.workspaces.workspace')"
@@ -91,13 +101,20 @@ async function createProject(parent: string, name: string) {
           />
           <div class="workspace-meta-row">
             <div
-              v-if="selectedRoot"
+              v-if="selectedWorkspace"
               class="workspace-path"
-              :title="selectedRoot"
+              :title="selectedWorkspace.path"
             >
-              {{ selectedRoot }}
+              {{ selectedWorkspace.path }}
             </div>
             <div class="workspace-actions">
+              <v-btn
+                icon="$mdiFolderCogOutline"
+                size="small"
+                variant="text"
+                :aria-label="locale.t('$vuetify.chatroom.workspaces.manage')"
+                @click="manageOpen = true"
+              />
               <v-btn
                 icon="$mdiPlus"
                 size="small"
@@ -127,7 +144,7 @@ async function createProject(parent: string, name: string) {
         {{ error }}
       </v-alert>
 
-      <template v-if="selectedRoot">
+      <template v-if="selectedWorkspaceId">
         <v-tabs v-model="tab" density="compact" class="workspace-tabs">
           <v-tab value="git">{{
             locale.t("$vuetify.chatroom.workspaces.git")
@@ -146,16 +163,16 @@ async function createProject(parent: string, name: string) {
 
         <v-window v-model="tab" :touch="false">
           <v-window-item value="git">
-            <WorkspaceGitPane :root="selectedRoot" />
+            <WorkspaceGitPane :workspace-id="selectedWorkspaceId" />
           </v-window-item>
           <v-window-item value="prompt">
-            <WorkspacePromptPane :root="selectedRoot" />
+            <WorkspacePromptPane :workspace-id="selectedWorkspaceId" />
           </v-window-item>
           <v-window-item value="files">
-            <WorkspaceFilesPane :root="selectedRoot" />
+            <WorkspaceFilesPane :workspace-id="selectedWorkspaceId" />
           </v-window-item>
           <v-window-item value="skills">
-            <WorkspaceSkillsPane :root="selectedRoot" />
+            <WorkspaceSkillsPane :workspace-id="selectedWorkspaceId" />
           </v-window-item>
         </v-window>
       </template>
@@ -174,5 +191,6 @@ async function createProject(parent: string, name: string) {
       :error="createError"
       @create="createProject"
     />
+    <WorkspaceManageDialog v-model="manageOpen" @updated="load" />
   </div>
 </template>

@@ -16,7 +16,7 @@ import {
 import { errorMessage } from "../utils/errors.js";
 import { createRequestGate } from "../utils/requests.js";
 
-export function useWorkspaceGit(root: WatchSource<string>) {
+export function useWorkspaceGit(workspaceId: WatchSource<string>) {
   const status = shallowRef<GitStatus | null>(null);
   const branches = shallowRef<GitBranch[]>([]);
   const commits = shallowRef<GitCommit[]>([]);
@@ -41,7 +41,9 @@ export function useWorkspaceGit(root: WatchSource<string>) {
   });
 
   const currentRoot = () =>
-    typeof root === "function" ? root() : String(root.value ?? "");
+    typeof workspaceId === "function"
+      ? workspaceId()
+      : String(workspaceId.value ?? "");
   const changes = computed(() => status.value?.changes ?? []);
   const selectedChange = computed(
     () =>
@@ -56,7 +58,7 @@ export function useWorkspaceGit(root: WatchSource<string>) {
   );
 
   watch(
-    root,
+    workspaceId,
     () => {
       generation += 1;
       loadRequests.invalidate();
@@ -81,7 +83,7 @@ export function useWorkspaceGit(root: WatchSource<string>) {
     error.value = "";
     try {
       const next = await api<GitStatus | null>(
-        `/git/status?root=${encodeURIComponent(targetRoot)}`,
+        `/git/status?workspaceId=${encodeURIComponent(targetRoot)}`,
         { signal: request.signal },
       );
       if (
@@ -132,8 +134,8 @@ export function useWorkspaceGit(root: WatchSource<string>) {
     const encoded = encodeURIComponent(targetRoot);
     const options = signal ? { signal } : {};
     const [nextBranches, nextCommits] = await Promise.all([
-      api<GitBranch[]>(`/git/branches?root=${encoded}`, options),
-      api<GitCommit[]>(`/git/log?root=${encoded}&limit=20`, options),
+      api<GitBranch[]>(`/git/branches?workspaceId=${encoded}`, options),
+      api<GitCommit[]>(`/git/log?workspaceId=${encoded}&limit=20`, options),
     ]);
     if (generationAtStart !== generation || currentRoot() !== targetRoot)
       return;
@@ -161,7 +163,7 @@ export function useWorkspaceGit(root: WatchSource<string>) {
     diffLoading.value = true;
     try {
       const next = await api<GitDiff>(
-        `/git/diff?root=${encodeURIComponent(targetRoot)}&path=${encodeURIComponent(path)}`,
+        `/git/diff?workspaceId=${encodeURIComponent(targetRoot)}&path=${encodeURIComponent(path)}`,
         { signal: request.signal },
       );
       if (
@@ -201,7 +203,7 @@ export function useWorkspaceGit(root: WatchSource<string>) {
     try {
       const next = await api<GitStatus>(endpoint, {
         method,
-        body: JSON.stringify({ root: targetRoot, ...body }),
+        body: JSON.stringify({ workspaceId: targetRoot, ...body }),
         timeoutMs,
         signal: mutation.signal,
       });

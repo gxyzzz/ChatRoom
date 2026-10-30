@@ -8,7 +8,7 @@ import { createRequestGate } from "../utils/requests.js";
 const SUMMARY_PATH = ".chatroom/summary.md";
 const PROMPT_PATH = ".chatroom/prompt.md";
 
-const props = defineProps<{ root: string }>();
+const props = defineProps<{ workspaceId: string }>();
 const summary = shallowRef("");
 const prompt = shallowRef("");
 const originalSummary = shallowRef("");
@@ -17,20 +17,20 @@ const loading = shallowRef(false);
 const saving = shallowRef(false);
 const saved = shallowRef(false);
 const error = shallowRef("");
-const loadedRoot = shallowRef<string | null>(null);
+const loadedWorkspaceId = shallowRef<string | null>(null);
 const locale = useLocale();
 const loadRequests = createRequestGate();
 const saveRequests = createRequestGate();
 
 const dirty = computed(
   () =>
-    loadedRoot.value === props.root &&
+    loadedWorkspaceId.value === props.workspaceId &&
     (summary.value !== originalSummary.value ||
       prompt.value !== originalPrompt.value),
 );
 
 watch(
-  () => props.root,
+  () => props.workspaceId,
   () => {
     loadRequests.invalidate();
     saveRequests.invalidate();
@@ -38,7 +38,7 @@ watch(
     prompt.value = "";
     originalSummary.value = "";
     originalPrompt.value = "";
-    loadedRoot.value = null;
+    loadedWorkspaceId.value = null;
     saving.value = false;
     saved.value = false;
     error.value = "";
@@ -49,21 +49,22 @@ watch(
 
 async function load() {
   const request = loadRequests.begin();
-  const root = props.root;
+  const workspaceId = props.workspaceId;
   loading.value = true;
   error.value = "";
   saved.value = false;
   try {
     const info = await api<WorkspaceInfo>(
-      `/workspace?root=${encodeURIComponent(root)}`,
+      `/workspace?workspaceId=${encodeURIComponent(workspaceId)}`,
       { signal: request.signal },
     );
-    if (!loadRequests.isCurrent(request) || props.root !== root) return;
+    if (!loadRequests.isCurrent(request) || props.workspaceId !== workspaceId)
+      return;
     summary.value = info.summary ?? "";
     prompt.value = info.presetPrompt ?? "";
     originalSummary.value = summary.value;
     originalPrompt.value = prompt.value;
-    loadedRoot.value = root;
+    loadedWorkspaceId.value = workspaceId;
   } catch (cause) {
     if (loadRequests.isCurrent(request)) error.value = errorMessage(cause);
   } finally {
@@ -72,22 +73,27 @@ async function load() {
 }
 
 async function writeFile(
-  root: string,
+  workspaceId: string,
   path: string,
   content: string,
   signal: AbortSignal,
 ) {
   await api("/workspace/file", {
     method: "PUT",
-    body: JSON.stringify({ root, path, content }),
+    body: JSON.stringify({ workspaceId, path, content }),
     signal,
   });
 }
 
 async function save() {
-  if (!dirty.value || saving.value || loadedRoot.value !== props.root) return;
+  if (
+    !dirty.value ||
+    saving.value ||
+    loadedWorkspaceId.value !== props.workspaceId
+  )
+    return;
   const request = saveRequests.begin();
-  const root = props.root;
+  const workspaceId = props.workspaceId;
   const nextSummary = summary.value;
   const nextPrompt = prompt.value;
   saving.value = true;
@@ -96,19 +102,24 @@ async function save() {
   try {
     const writes: Promise<void>[] = [];
     if (nextSummary !== originalSummary.value)
-      writes.push(writeFile(root, SUMMARY_PATH, nextSummary, request.signal));
+      writes.push(
+        writeFile(workspaceId, SUMMARY_PATH, nextSummary, request.signal),
+      );
     if (nextPrompt !== originalPrompt.value)
-      writes.push(writeFile(root, PROMPT_PATH, nextPrompt, request.signal));
+      writes.push(
+        writeFile(workspaceId, PROMPT_PATH, nextPrompt, request.signal),
+      );
     await Promise.all(writes);
-    if (!saveRequests.isCurrent(request) || props.root !== root) return;
+    if (!saveRequests.isCurrent(request) || props.workspaceId !== workspaceId)
+      return;
     originalSummary.value = nextSummary;
     originalPrompt.value = nextPrompt;
     saved.value = true;
   } catch (cause) {
-    if (saveRequests.isCurrent(request) && props.root === root)
+    if (saveRequests.isCurrent(request) && props.workspaceId === workspaceId)
       error.value = errorMessage(cause);
   } finally {
-    if (saveRequests.isCurrent(request) && props.root === root)
+    if (saveRequests.isCurrent(request) && props.workspaceId === workspaceId)
       saving.value = false;
   }
 }

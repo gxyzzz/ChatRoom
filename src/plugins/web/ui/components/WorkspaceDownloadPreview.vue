@@ -15,7 +15,7 @@ import MarkdownContent from "./MarkdownContent.vue";
 import WorkspaceCsvPreview from "./WorkspaceCsvPreview.vue";
 import WorkspaceMediaPreview from "./WorkspaceMediaPreview.vue";
 
-const props = defineProps<{ workspace: string; path: string }>();
+const props = defineProps<{ workspaceId: string; path: string }>();
 const open = defineModel<boolean>({ required: true });
 const locale = useLocale();
 const kind = computed(() => filePreviewKind(props.path));
@@ -23,13 +23,13 @@ const fileName = computed(() => nameOf(props.path));
 const fileUrl = computed(() => {
   const endpoint = kind.value === "image" ? "image" : "preview";
   return `/api/workspace/file/${endpoint}?${new URLSearchParams({
-    workspace: props.workspace,
+    workspaceId: props.workspaceId,
     path: props.path,
   })}`;
 });
 function download(): void {
   void downloadFile(
-    workspaceDownloadUrl(props.workspace, props.path),
+    workspaceDownloadUrl(props.workspaceId, props.path),
     fileName.value,
   ).catch(() => {});
 }
@@ -39,7 +39,7 @@ const loading = shallowRef(false);
 const error = shallowRef("");
 
 watch(
-  [open, () => props.workspace, () => props.path],
+  [open, () => props.workspaceId, () => props.path],
   ([visible], _previous, onCleanup) => {
     content.value = null;
     error.value = "";
@@ -49,7 +49,7 @@ watch(
     onCleanup(() => controller.abort());
     loading.value = true;
     void api<WorkspaceFileContent>(
-      `/workspace/file?${new URLSearchParams({ workspace: props.workspace, path: props.path })}`,
+      `/workspace/file?${new URLSearchParams({ workspaceId: props.workspaceId, path: props.path })}`,
       { signal: controller.signal },
     )
       .then((result) => {

@@ -6,7 +6,7 @@ const OPERATION_STATUSES = [
 ] as const;
 export type OperationStatus = (typeof OPERATION_STATUSES)[number];
 
-const OPERATION_SOURCES = ["mcp", "gui", "system", "cli"] as const;
+const OPERATION_SOURCES = ["mcp", "agent_mcp", "gui", "system", "cli"] as const;
 export type OperationSource = (typeof OPERATION_SOURCES)[number];
 
 export interface Operation {

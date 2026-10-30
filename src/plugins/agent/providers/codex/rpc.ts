@@ -24,6 +24,11 @@ interface InitializeResult {
   userAgent: string;
 }
 
+export interface CodexMcpConnection {
+  url: string;
+  token: string;
+}
+
 export class CodexRpcClient {
   private process: LineProcess | null = null;
   private readonly pending = new Map<number, PendingRequest>();
@@ -38,7 +43,13 @@ export class CodexRpcClient {
   private starting: Promise<InitializeResult> | null = null;
   private initialized: InitializeResult | null = null;
 
-  constructor(private readonly logs: LogWriter) {}
+  constructor(
+    private readonly logs: LogWriter,
+    private readonly mcpConnection: CodexMcpConnection = {
+      url: "http://127.0.0.1:1/mcp",
+      token: "test-only-token",
+    },
+  ) {}
 
   async ensureStarted(): Promise<InitializeResult> {
     if (this.initialized) return this.initialized;
@@ -58,6 +69,13 @@ export class CodexRpcClient {
   ): Promise<T> {
     await this.ensureStarted();
     return this.requestReady<T>(method, params, timeoutMs);
+  }
+
+  async reloadMcpConfiguration(): Promise<void> {
+    // Before Codex starts, the MCP config passed on its command line will be
+    // picked up by the initial connection; avoid spawning Codex just for UI toggles.
+    if (!this.initialized) return;
+    await this.requestReady("config/mcpServer/reload", {});
   }
 
   notify(method: string, params?: unknown): void {
@@ -102,7 +120,17 @@ export class CodexRpcClient {
     let process: LineProcess;
     process = new LineProcess({
       command: "codex",
-      args: ["app-server", "--listen", "stdio://", "-c", "mcp_servers={}"],
+      args: [
+        "app-server",
+        "--listen",
+        "stdio://",
+        "-c",
+        "mcp_servers.chatroom_agent.url=" +
+          JSON.stringify(this.mcpConnection.url),
+        "-c",
+        'mcp_servers.chatroom_agent.bearer_token_env_var="CHATROOM_AGENT_MCP_TOKEN"',
+      ],
+      env: { CHATROOM_AGENT_MCP_TOKEN: this.mcpConnection.token },
       onStdout: (line) => this.handleLine(line),
       onStderr: (line) => {
         const message = line.trim();

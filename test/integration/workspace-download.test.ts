@@ -7,13 +7,17 @@ import { createTestRuntime } from "../helpers/runtime.js";
 test("workspace file download is streamed and supports Range", async () => {
   const runtime = await createTestRuntime();
   try {
+    const workspace = runtime.components.database.raw
+      .prepare("SELECT id FROM workspaces WHERE path=?")
+      .get(runtime.workspaceRoot) as { id: string } | undefined;
+    assert.ok(workspace);
     const payload = Buffer.alloc(3 * 1024 * 1024, 147);
     await writeFile(path.join(runtime.workspaceRoot, "测试文件.bin"), payload);
     await runtime.components.http.start();
     const address = runtime.components.http.address();
     assert.ok(address);
     const params = new URLSearchParams({
-      workspace: path.basename(runtime.workspaceRoot),
+      workspaceId: workspace.id,
       path: "测试文件.bin",
     });
     const url = `http://127.0.0.1:${address.port}/api/workspace/file/download?${params}`;
@@ -45,6 +49,10 @@ test("workspace file download shares Web session authentication", async () => {
     },
   });
   try {
+    const workspace = runtime.components.database.raw
+      .prepare("SELECT id FROM workspaces WHERE path=?")
+      .get(runtime.workspaceRoot) as { id: string } | undefined;
+    assert.ok(workspace);
     await writeFile(
       path.join(runtime.workspaceRoot, "data.txt"),
       "authenticated",
@@ -54,7 +62,7 @@ test("workspace file download shares Web session authentication", async () => {
     assert.ok(address);
     const base = `http://127.0.0.1:${address.port}`;
     const params = new URLSearchParams({
-      workspace: path.basename(runtime.workspaceRoot),
+      workspaceId: workspace.id,
       path: "data.txt",
     });
     const url = `${base}/api/workspace/file/download?${params}`;

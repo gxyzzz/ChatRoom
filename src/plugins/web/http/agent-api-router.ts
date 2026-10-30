@@ -57,7 +57,7 @@ export function createAgentApiRouter(agents: AgentRuntime): Router {
       const body = bodyRecord(req.body);
       res.json(
         await agents.createSession({
-          workspaceRoot: requireString(body.workspaceRoot, "workspaceRoot"),
+          workspaceId: requireString(body.workspaceId, "workspaceId"),
           provider: requireProvider(requireString(body.provider, "provider")),
           model: null,
           reasoningEffort: null,
@@ -185,6 +185,29 @@ export function createAgentApiRouter(agents: AgentRuntime): Router {
       );
     }),
   );
+
+  const bulkDeleteSessions = asyncRoute(async (req, res) => {
+    const body = bodyRecord(req.body);
+    if (!Array.isArray(body.sessionIds) || body.sessionIds.length === 0)
+      throw new ChatRoomError(
+        "INVALID_INPUT",
+        "sessionIds must be a non-empty array",
+      );
+    if (body.sessionIds.length > 100)
+      throw new ChatRoomError(
+        "INVALID_INPUT",
+        "Cannot delete more than 100 Agent sessions at once",
+      );
+    const sessionIds = body.sessionIds.map((id) =>
+      requireString(id, "sessionIds[]"),
+    );
+    await agents.deleteSessions(sessionIds);
+    res.status(204).end();
+  });
+  // POST is the primary batch action for maximum compatibility with clients
+  // and intermediaries that mishandle bodies on DELETE requests.
+  router.post("/agents/sessions/bulk-delete", bulkDeleteSessions);
+  router.delete("/agents/sessions", bulkDeleteSessions);
 
   router.delete(
     "/agents/sessions/:sessionId",

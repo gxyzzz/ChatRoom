@@ -18,6 +18,7 @@ export function createWorkspacePlugin(): InternalPlugin {
       service = await WorkspaceService.create(
         context.config.allowedRoots,
         context.services.require(GitAccessToken),
+        context.database,
       );
       context.services.provide(WorkspaceServiceToken, service);
       context.services.provide(WorkspaceAccessToken, service);
